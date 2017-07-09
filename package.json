@@ -10,12 +10,15 @@
     "type": "git",
     "url": "git+https://github.com/CharlesHolbrow/synk-js.git"
   },
-  "keywords": [
-  ],
+  "keywords": [],
   "author": "CharlesHolbrow@gmail.com",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/CharlesHolbrow/synk-js/issues"
   },
-  "homepage": "https://github.com/CharlesHolbrow/synk-js#readme"
+  "homepage": "https://github.com/CharlesHolbrow/synk-js#readme",
+  "devDependencies": {
+    "babel-eslint": "^7.2.3",
+    "eslint": "^4.2.0"
+  }
 }
