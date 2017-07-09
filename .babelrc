@@ -1,0 +1,11 @@
+{
+  "presets": [
+    ["env", {
+      "targets": {
+        "browsers": ["ie >= 9", "safari >= 2", "firefox >= 10", "chrome >= 11", "opera >= 12"]
+      },
+      "useBuiltIns": true
+    }]
+  ],
+  "plugins": ["transform-es2015-modules-commonjs"]
+}
