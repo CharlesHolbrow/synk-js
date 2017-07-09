@@ -1,7 +1,7 @@
 /**
  * Test
  */
-export class DeleteMe {
+export default class DeleteMe {
   /**
    * This is just a test
    */
