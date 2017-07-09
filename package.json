@@ -1,0 +1,21 @@
+{
+  "name": "synk-js",
+  "version": "1.0.0",
+  "description": "Companion to the go synk package",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CharlesHolbrow/synk-js.git"
+  },
+  "keywords": [
+  ],
+  "author": "CharlesHolbrow@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CharlesHolbrow/synk-js/issues"
+  },
+  "homepage": "https://github.com/CharlesHolbrow/synk-js#readme"
+}
