@@ -24,7 +24,8 @@
     "eslint": "^4.2.0",
     "webpack": "^3.3.0"
   },
-  "dependencies": {
+  "dependencies": {},
+  "peerDependencies": {
     "kefir": "^3.7.2"
   },
   "module": "src/index.js"
