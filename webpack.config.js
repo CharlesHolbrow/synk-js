@@ -9,11 +9,10 @@ module.exports = {
     libraryTarget: 'umd',
   },
   externals: {
-    Kefir: {
-      commonjs: 'Kefir',
-      commonjs2: 'Kefir',
+    kefir: {
+      commonjs: 'kefir',
+      commonjs2: 'kefir',
       global: 'Kefir',
-      amd: 'Kefir',
     },
   },
   module: {

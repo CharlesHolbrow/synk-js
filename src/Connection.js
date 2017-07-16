@@ -1,4 +1,4 @@
-import Kefir from 'Kefir';
+import Kefir from 'kefir';
 
 /**
  * Test
