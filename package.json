@@ -31,6 +31,5 @@
   "dependencies": {},
   "peerDependencies": {
     "kefir": "^3.7.2"
-  },
-  "module": "src/index.js"
+  }
 }
