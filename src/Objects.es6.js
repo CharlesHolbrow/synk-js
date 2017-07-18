@@ -1,5 +1,5 @@
-import Endpoint from './Endpoint.js';
-import Branch from './Branch.js';
+import Endpoint from './Endpoint';
+import Branch from './Branch';
 
 /**
  * Create a subscription key for a given location on a map.
