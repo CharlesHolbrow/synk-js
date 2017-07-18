@@ -29,10 +29,13 @@
     "mocha": "^3.4.2",
     "mocha-webpack": "^0.7.0",
     "webpack": "^3.3.0",
-    "webpack-node-externals": "^1.6.0"
+    "webpack-node-externals": "^1.6.0",
+    "eventemitter3": "^2.0.3"
   },
-  "dependencies": {},
+  "dependencies": {
+  },
   "peerDependencies": {
+    "eventemitter3": "^2.0.3",
     "kefir": "^3.7.2"
   }
 }
