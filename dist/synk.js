@@ -567,7 +567,7 @@ exports.default = Branch;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Objects = exports.Branch = exports.Endpoint = exports.Conn = undefined;
+exports.Objects = exports.Branch = exports.Endpoint = exports.Connection = undefined;
 
 var _Connection = __webpack_require__(4);
 
@@ -587,7 +587,7 @@ var _Objects2 = _interopRequireDefault(_Objects);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-exports.Conn = _Connection2.default;
+exports.Connection = _Connection2.default;
 exports.Endpoint = _Endpoint2.default;
 exports.Branch = _Branch2.default;
 exports.Objects = _Objects2.default;
