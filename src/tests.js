@@ -1,1 +1,1 @@
-import './Connection.tests.js';
+import './Connection.tests';

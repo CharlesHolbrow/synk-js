@@ -15,6 +15,9 @@ module.exports = {
       global: 'Kefir',
     },
   },
+  resolve: {
+    extensions: [".js", ".json", ".es6.js"]
+  },
   module: {
     rules: [
       {

@@ -4,9 +4,8 @@
   "description": "Companion to the go synk package",
   "main": "dist/synk.js",
   "scripts": {
-    "build:browser": "webpack && cp dist/synk.js examples/browser",
-    "build:node": "webpack && cp dist/synk.js examples/node/ && node examples/node/synk.js",
-    "test": "mocha-webpack --webpack-config webpack.config-test.js \"src/**/*.tests?.js\""
+    "build": "webpack",
+    "test": "mocha-webpack --webpack-config webpack.tests.js \"src/**/*.tests?(.es6).js\""
   },
   "repository": {
     "type": "git",

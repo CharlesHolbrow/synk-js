@@ -1,5 +1,5 @@
 import { assert } from 'chai';
-import Connection from './Connection.js';
+import Connection from './Connection';
 
 const c = new Connection();
 

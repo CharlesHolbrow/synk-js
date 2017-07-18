@@ -1,4 +1,4 @@
-import Conn from './Connection.js';
+import Conn from './Connection';
 
 export { Conn };
 

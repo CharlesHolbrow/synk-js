@@ -4,6 +4,9 @@ var nodeExternals = require('webpack-node-externals');
 module.exports = {
   target: 'node',
   externals: [nodeExternals()],
+  resolve: {
+    extensions: [".js", ".json", ".es6.js"]
+  },
   module: {
     rules: [
       {
