@@ -869,9 +869,8 @@ var Objects = function (_Endpoint) {
    * we would have to have this function mutate the mapSubscription (currently
    * the mapSubscription methods call this, not the other way around)
    *
-   * @param {Object} updateSubscriptionMsg - The message returned by
-   *        mapSubscription methods. Has .add and .remove arrays.
-   *
+   * @param {Object} updateSubscriptionMsg - Object containing subscription
+   *        change. The object must have to arrays of strings: .add and .remove
    */
 
 
@@ -886,7 +885,7 @@ var Objects = function (_Endpoint) {
 
       // When we unsubscribe from a chunk, we need to remove and teardown all the
       // objects in that chunk.
-      msg.removeSKey.forEach(function (p) {
+      msg.remove.forEach(function (p) {
         // Remove the enture chunk
         _this2.bySKey.removeBranch(p).forEach(function (leaf) {
           var _byKey;
@@ -903,7 +902,7 @@ var Objects = function (_Endpoint) {
         });
       });
 
-      msg.addSKey.forEach(function (p) {
+      msg.add.forEach(function (p) {
         _this2.bySKey.createBranch(p);
       });
     }

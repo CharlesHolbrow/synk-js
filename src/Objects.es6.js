@@ -22,9 +22,8 @@ export default class Objects extends Endpoint {
    * we would have to have this function mutate the mapSubscription (currently
    * the mapSubscription methods call this, not the other way around)
    *
-   * @param {Object} updateSubscriptionMsg - The message returned by
-   *        mapSubscription methods. Has .add and .remove arrays.
-   *
+   * @param {Object} updateSubscriptionMsg - Object containing subscription
+   *        change. The object must have to arrays of strings: .add and .remove
    */
   updateKeys(updateSubscriptionMsg) {
     const msg = updateSubscriptionMsg;
@@ -34,7 +33,7 @@ export default class Objects extends Endpoint {
 
     // When we unsubscribe from a chunk, we need to remove and teardown all the
     // objects in that chunk.
-    msg.removeSKey.forEach((p) => {
+    msg.remove.forEach((p) => {
       // Remove the enture chunk
       this.bySKey.removeBranch(p).forEach((leaf) => {
         // Remove each object from its collection
@@ -50,7 +49,7 @@ export default class Objects extends Endpoint {
       });
     });
 
-    msg.addSKey.forEach((p) => {
+    msg.add.forEach((p) => {
       this.bySKey.createBranch(p);
     });
   }
