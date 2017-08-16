@@ -23,7 +23,7 @@ export default class Objects extends Endpoint {
    * the mapSubscription methods call this, not the other way around)
    *
    * @param {Object} updateSubscriptionMsg - Object containing subscription
-   *        change. The object must have to arrays of strings: .add and .remove
+   *        change. The object must have two arrays of strings: .add and .remove
    */
   updateKeys(updateSubscriptionMsg) {
     const msg = updateSubscriptionMsg;
