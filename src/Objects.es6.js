@@ -2,17 +2,6 @@ import Endpoint from './Endpoint';
 import Branch from './Branch';
 
 /**
- * Create a subscription key for a given location on a map.
- * @param {string} mapID - map identification
- * @param {number} cx - chunk x coordinate
- * @param {number} cy - chunk y coordinate
- * @returns {string} - sKey for a map location
- */
-function subKey(mapID, cx, cy) {
-  return `objs:${mapID}:${cx.toString(36)}|${cy.toString(36)}`;
-}
-
-/**
  * Store a collection of objects that will be synchronized with the server
  */
 export default class Objects extends Endpoint {
@@ -35,15 +24,19 @@ export default class Objects extends Endpoint {
    *
    * @param {Object} updateSubscriptionMsg - The message returned by
    *        mapSubscription methods. Has .add and .remove arrays.
+   *
    */
   updateKeys(updateSubscriptionMsg) {
     const msg = updateSubscriptionMsg;
 
+    if (!Array.isArray(msg.remove) || !Array.isArray(msg.add))
+      console.error('Objects.updateKeys received invalid message:', msg);
+
     // When we unsubscribe from a chunk, we need to remove and teardown all the
     // objects in that chunk.
-    msg.remove.forEach((p) => {
+    msg.removeSKey.forEach((p) => {
       // Remove the enture chunk
-      this.bySKey.removeBranch(subKey(msg.mapID, p.x, p.y)).forEach((leaf) => {
+      this.bySKey.removeBranch(p).forEach((leaf) => {
         // Remove each object from its collection
         const parts = leaf.key.split(':');
         const id = parts.pop();
@@ -57,8 +50,8 @@ export default class Objects extends Endpoint {
       });
     });
 
-    msg.add.forEach((p) => {
-      this.bySKey.createBranch(subKey(msg.mapID, p.x, p.y));
+    msg.addSKey.forEach((p) => {
+      this.bySKey.createBranch(p);
     });
   }
 

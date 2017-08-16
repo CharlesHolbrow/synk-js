@@ -843,20 +843,8 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
 /**
- * Create a subscription key for a given location on a map.
- * @param {string} mapID - map identification
- * @param {number} cx - chunk x coordinate
- * @param {number} cy - chunk y coordinate
- * @returns {string} - sKey for a map location
- */
-function subKey(mapID, cx, cy) {
-  return 'objs:' + mapID + ':' + cx.toString(36) + '|' + cy.toString(36);
-}
-
-/**
  * Store a collection of objects that will be synchronized with the server
  */
-
 var Objects = function (_Endpoint) {
   _inherits(Objects, _Endpoint);
 
@@ -883,6 +871,7 @@ var Objects = function (_Endpoint) {
    *
    * @param {Object} updateSubscriptionMsg - The message returned by
    *        mapSubscription methods. Has .add and .remove arrays.
+   *
    */
 
 
@@ -893,11 +882,13 @@ var Objects = function (_Endpoint) {
 
       var msg = updateSubscriptionMsg;
 
+      if (!Array.isArray(msg.remove) || !Array.isArray(msg.add)) console.error('Objects.updateKeys received invalid message:', msg);
+
       // When we unsubscribe from a chunk, we need to remove and teardown all the
       // objects in that chunk.
-      msg.remove.forEach(function (p) {
+      msg.removeSKey.forEach(function (p) {
         // Remove the enture chunk
-        _this2.bySKey.removeBranch(subKey(msg.mapID, p.x, p.y)).forEach(function (leaf) {
+        _this2.bySKey.removeBranch(p).forEach(function (leaf) {
           var _byKey;
 
           // Remove each object from its collection
@@ -912,8 +903,8 @@ var Objects = function (_Endpoint) {
         });
       });
 
-      msg.add.forEach(function (p) {
-        _this2.bySKey.createBranch(subKey(msg.mapID, p.x, p.y));
+      msg.addSKey.forEach(function (p) {
+        _this2.bySKey.createBranch(p);
       });
     }
 
