@@ -7,7 +7,7 @@
 		exports["synk"] = factory(require("kefir"), require("eventemitter3"));
 	else
 		root["synk"] = factory(root[undefined], root[undefined]);
-})(this, function(__WEBPACK_EXTERNAL_MODULE_0__, __WEBPACK_EXTERNAL_MODULE_5__) {
+})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_6__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -70,17 +70,11 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 3);
+/******/ 	return __webpack_require__(__webpack_require__.s = 5);
 /******/ })
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ (function(module, exports) {
-
-module.exports = __WEBPACK_EXTERNAL_MODULE_0__;
-
-/***/ }),
-/* 1 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -92,7 +86,226 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _kefir = __webpack_require__(0);
+var _eventemitter = __webpack_require__(6);
+
+var _eventemitter2 = _interopRequireDefault(_eventemitter);
+
+var _kefir = __webpack_require__(1);
+
+var _kefir2 = _interopRequireDefault(_kefir);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+// How long do we wait before retrying a connection
+var TIMEOUT = 500;
+
+/**
+* Wrap a websocket connection to the server
+*/
+
+var Connection = function (_Emitter) {
+  _inherits(Connection, _Emitter);
+
+  /**
+  * Create a new instance of a connection.
+  *
+  * Events
+  * - 'connect' - fired the first time a connection opens successfullly
+  * - 'reconnect' - fired when subsequenct connections open
+  * - 'open' - fired when any connection opens
+  * - 'close' - fired when any connection closes
+  * - 'sendError' (message) - we tried to send, but the connection is closed
+  *
+  * @arg {string} url - websocket url to connect to
+  */
+  function Connection(url) {
+    _classCallCheck(this, Connection);
+
+    /**
+    * @member {url} string - the url we connect to on the next connection
+    */
+    var _this = _possibleConstructorReturn(this, (Connection.__proto__ || Object.getPrototypeOf(Connection)).call(this));
+
+    _this.url = url;
+
+    /**
+    * @member {Kefir.stream} - stream of messages received from the server
+    * @readonly
+    */
+    _this.stream = _kefir2.default.fromEvents(_this, 'message');
+
+    /**
+    * @member {WebSocket} - The current socket object
+    * @readonly
+    */
+    _this.sock = null;
+
+    /**
+     * @member {Kefir.stream} - event each time the connection is opened
+     * @readonly
+     */
+    _this.openStream = _kefir2.default.fromEvents(_this, 'open');
+
+    _this._connectionCount = 0;
+    _this._log = [];
+    _this._messageQue = [];
+    _this._connect();
+    return _this;
+  }
+
+  /**
+  * Connect and stay connected. This is called once by the constructor. It
+  * should not be called again manually.
+  */
+
+
+  _createClass(Connection, [{
+    key: '_connect',
+    value: function _connect() {
+      var _this2 = this;
+
+      this.log('connecting...');
+      this.sock = new WebSocket(this.url);
+
+      var reconnect = function reconnect() {
+        _this2.log('Waiting to reconnect...');
+        setTimeout(function () {
+          _this2._connect();
+        }, TIMEOUT);
+      };
+
+      this.sock.onerror = function (error) {
+        _this2.log(['socket error', error]);
+      };
+
+      this.sock.onopen = function () {
+        _this2.log('connection opened');
+        _this2.sock.onmessage = function (m) {
+          _this2.emit('message', JSON.parse(m.data));
+        };
+
+        _this2._connectionCount += 1;
+        if (_this2._connectionCount === 1) {
+          // If this is our first time connecting, send qued messages
+          while (_this2._messageQue.length) {
+            _this2.send(_this2._messageQue[0]);
+            _this2._messageQue.shift();
+          }
+          _this2.emit('connect');
+        } else _this2.emit('reconnect');
+
+        _this2.emit('open');
+      };
+
+      // This fires if even if the connection was never opened. For example, if
+      // the server is down when we first connect, onclose will still fire.
+      this.sock.onclose = function () {
+        _this2.log('close');
+        _this2.emit('close');
+        reconnect();
+      };
+    }
+
+    /**
+    * @arg {anything} value - Add any value to this connection's internal log
+    */
+
+  }, {
+    key: 'log',
+    value: function log(value) {
+      this._log.push(value);
+      this.emit('log', value);
+      if (this._log.length > 200) this._log.shift();
+    }
+
+    /**
+    * Get the Ready State Constant of the current socket. One of the following ints:
+    * 0 - CONNECTING The connection is not yet open.
+    * 1 - OPEN The connection is open and ready to communicate.
+    * 2 - CLOSING The connection is in the process of closing.
+    * 3 - CLOSED The connection is closed or couldn't be opened.
+    *
+    * @returns {number} - Ready State Constant
+    */
+
+  }, {
+    key: 'send',
+
+
+    /**
+    * Send a message to the server. If the connection is not yet open, que the
+    * message to be sent once the connection does open.
+    *
+    * @arg {Object|String} message - JSON object or string to send to the server.
+    * @returns {bool|null} - true if the message was sent successfully. null if the
+    *          message was qued to be sent later. False if send failed.
+    */
+    value: function send(message) {
+      if (typeof message !== 'string') message = JSON.stringify(message);
+
+      if (this.state === 1) {
+        // We are connected
+        this.sock.send(message);
+
+        return true;
+      }
+
+      // we are not connected
+      if (this._connectionCount === 0) {
+        // We have never been connected
+        this._messageQue.push(message);
+        this.log(['message qued', message]);
+
+        return null;
+      }
+
+      // We tried to send, but the connection was broken
+      this.log({ reason: 'send failed because the connection was broken:', msg: message });
+      this.log(message);
+      this.emit('sendError', message);
+
+      return false;
+    }
+  }, {
+    key: 'state',
+    get: function get() {
+      if (!this.sock) return 3;
+
+      return this.sock.readyState;
+    }
+  }]);
+
+  return Connection;
+}(_eventemitter2.default);
+
+exports.default = Connection;
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE_1__;
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _kefir = __webpack_require__(1);
 
 var _kefir2 = _interopRequireDefault(_kefir);
 
@@ -195,7 +408,7 @@ var Endpoint = function () {
 exports.default = Endpoint;
 
 /***/ }),
-/* 2 */
+/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -558,41 +771,6 @@ var Branch = function () {
 exports.default = Branch;
 
 /***/ }),
-/* 3 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.Objects = exports.Branch = exports.Endpoint = exports.Connection = undefined;
-
-var _Connection = __webpack_require__(4);
-
-var _Connection2 = _interopRequireDefault(_Connection);
-
-var _Endpoint = __webpack_require__(1);
-
-var _Endpoint2 = _interopRequireDefault(_Endpoint);
-
-var _Branch = __webpack_require__(2);
-
-var _Branch2 = _interopRequireDefault(_Branch);
-
-var _Objects = __webpack_require__(6);
-
-var _Objects2 = _interopRequireDefault(_Objects);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-exports.Connection = _Connection2.default;
-exports.Endpoint = _Endpoint2.default;
-exports.Branch = _Branch2.default;
-exports.Objects = _Objects2.default;
-
-/***/ }),
 /* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -605,230 +783,11 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _eventemitter = __webpack_require__(5);
-
-var _eventemitter2 = _interopRequireDefault(_eventemitter);
-
-var _kefir = __webpack_require__(0);
-
-var _kefir2 = _interopRequireDefault(_kefir);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-// How long do we wait before retrying a connection
-var TIMEOUT = 500;
-
-/**
-* Wrap a websocket connection to the server
-*/
-
-var Connection = function (_Emitter) {
-  _inherits(Connection, _Emitter);
-
-  /**
-  * Create a new instance of a connection.
-  *
-  * Events
-  * - 'connect' - fired the first time a connection opens successfullly
-  * - 'reconnect' - fired when subsequenct connections open
-  * - 'open' - fired when any connection opens
-  * - 'close' - fired when any connection closes
-  * - 'sendError' (message) - we tried to send, but the connection is closed
-  *
-  * @arg {string} url - websocket url to connect to
-  */
-  function Connection(url) {
-    _classCallCheck(this, Connection);
-
-    /**
-    * @member {url} string - the url we connect to on the next connection
-    */
-    var _this = _possibleConstructorReturn(this, (Connection.__proto__ || Object.getPrototypeOf(Connection)).call(this));
-
-    _this.url = url;
-
-    /**
-    * @member {Kefir.stream} - stream of messages received from the server
-    * @readonly
-    */
-    _this.stream = _kefir2.default.fromEvents(_this, 'message');
-
-    /**
-    * @member {WebSocket} - The current socket object
-    * @readonly
-    */
-    _this.sock = null;
-
-    /**
-     * @member {Kefir.stream} - event each time the connection is opened
-     * @readonly
-     */
-    _this.openStream = _kefir2.default.fromEvents(_this, 'open');
-
-    _this._connectionCount = 0;
-    _this._log = [];
-    _this._messageQue = [];
-    _this._connect();
-    return _this;
-  }
-
-  /**
-  * Connect and stay connected. This is called once by the constructor. It
-  * should not be called again manually.
-  */
-
-
-  _createClass(Connection, [{
-    key: '_connect',
-    value: function _connect() {
-      var _this2 = this;
-
-      this.log('connecting...');
-      this.sock = new WebSocket(this.url);
-
-      var reconnect = function reconnect() {
-        _this2.log('Waiting to reconnect...');
-        setTimeout(function () {
-          _this2._connect();
-        }, TIMEOUT);
-      };
-
-      this.sock.onerror = function (error) {
-        _this2.log(['socket error', error]);
-      };
-
-      this.sock.onopen = function () {
-        _this2.log('connection opened');
-        _this2.sock.onmessage = function (m) {
-          _this2.emit('message', JSON.parse(m.data));
-        };
-
-        _this2._connectionCount += 1;
-        if (_this2._connectionCount === 1) {
-          // If this is our first time connecting, play send qued messages
-          while (_this2._messageQue.length) {
-            _this2.send(_this2._messageQue[0]);
-            _this2._messageQue.shift();
-          }
-          _this2.emit('connect');
-        } else _this2.emit('reconnect');
-
-        _this2.emit('open');
-      };
-
-      // This fires if even if the connection was never opened. For example, if
-      // the server is down when we first connect, onclose will still fire.
-      this.sock.onclose = function () {
-        _this2.log('close');
-        _this2.emit('close');
-        reconnect();
-      };
-    }
-
-    /**
-    * @arg {anything} value - Add any value to this connection's internal log
-    */
-
-  }, {
-    key: 'log',
-    value: function log(value) {
-      this._log.push(value);
-      this.emit('log', value);
-      if (this._log.length > 200) this._log.shift();
-    }
-
-    /**
-    * Get the Ready State Constant of the current socket. One of the following ints:
-    * 0 - CONNECTING The connection is not yet open.
-    * 1 - OPEN The connection is open and ready to communicate.
-    * 2 - CLOSING The connection is in the process of closing.
-    * 3 - CLOSED The connection is closed or couldn't be opened.
-    *
-    * @returns {number} - Ready State Constant
-    */
-
-  }, {
-    key: 'send',
-
-
-    /**
-    * Send a message to the server. If the connection is not yet open, que the
-    * message to be sent once the connection does open.
-    *
-    * @arg {Object|String} message - JSON object or string to send to the server.
-    * @returns {bool|null} - true if the message was sent successfully. null if the
-    *          message was qued to be sent later. False if send failed.
-    */
-    value: function send(message) {
-      if (typeof message !== 'string') message = JSON.stringify(message);
-
-      if (this.state === 1) {
-        // We are connected
-        this.sock.send(message);
-
-        return true;
-      }
-
-      // we are not connected
-      if (this._connectionCount === 0) {
-        // We have never been connected
-        this._messageQue.push(message);
-        this.log(['message qued', message]);
-
-        return null;
-      }
-
-      // We tried to send, but the connection was broken
-      this.log({ reason: 'send failed because the connection was broken:', msg: message });
-      this.log(message);
-      this.emit('sendError', message);
-
-      return false;
-    }
-  }, {
-    key: 'state',
-    get: function get() {
-      if (!this.sock) return 3;
-
-      return this.sock.readyState;
-    }
-  }]);
-
-  return Connection;
-}(_eventemitter2.default);
-
-exports.default = Connection;
-
-/***/ }),
-/* 5 */
-/***/ (function(module, exports) {
-
-module.exports = __WEBPACK_EXTERNAL_MODULE_5__;
-
-/***/ }),
-/* 6 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-var _Endpoint2 = __webpack_require__(1);
+var _Endpoint2 = __webpack_require__(2);
 
 var _Endpoint3 = _interopRequireDefault(_Endpoint2);
 
-var _Branch = __webpack_require__(2);
+var _Branch = __webpack_require__(3);
 
 var _Branch2 = _interopRequireDefault(_Branch);
 
@@ -870,7 +829,7 @@ var Objects = function (_Endpoint) {
    * the mapSubscription methods call this, not the other way around)
    *
    * @param {Object} updateSubscriptionMsg - Object containing subscription
-   *        change. The object must have to arrays of strings: .add and .remove
+   *        change. The object must have two arrays of strings: .add and .remove
    */
 
 
@@ -1038,6 +997,363 @@ var Objects = function (_Endpoint) {
 }(_Endpoint3.default);
 
 exports.default = Objects;
+
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.Synk = exports.Objects = exports.Branch = exports.Endpoint = exports.Connection = undefined;
+
+var _Connection = __webpack_require__(0);
+
+var _Connection2 = _interopRequireDefault(_Connection);
+
+var _Endpoint = __webpack_require__(2);
+
+var _Endpoint2 = _interopRequireDefault(_Endpoint);
+
+var _Branch = __webpack_require__(3);
+
+var _Branch2 = _interopRequireDefault(_Branch);
+
+var _Objects = __webpack_require__(4);
+
+var _Objects2 = _interopRequireDefault(_Objects);
+
+var _Synk = __webpack_require__(7);
+
+var _Synk2 = _interopRequireDefault(_Synk);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+exports.Connection = _Connection2.default;
+exports.Endpoint = _Endpoint2.default;
+exports.Branch = _Branch2.default;
+exports.Objects = _Objects2.default;
+exports.Synk = _Synk2.default;
+
+/***/ }),
+/* 6 */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE_6__;
+
+/***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _Objects = __webpack_require__(4);
+
+var _Objects2 = _interopRequireDefault(_Objects);
+
+var _Connection = __webpack_require__(0);
+
+var _Connection2 = _interopRequireDefault(_Connection);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+/**
+ * Synk wraps a connection and an Objects subscription.
+ */
+var Synk = function () {
+  /**
+   * @arg {string} url - the websocket url to connect to
+   * @arg {[class]} webSocketStub - optional class to use instead of WebSocket.
+   *      Useful for testing inside of Node.js. Probably not needed in an
+   *      application.
+   */
+  function Synk(url) {
+    var _this = this;
+
+    _classCallCheck(this, Synk);
+
+    this.objects = new _Objects2.default();
+    this.connection = new _Connection2.default(url);
+
+    this.objects.subscribe(this.connection.stream);
+
+    this.active = {}; // currently active subscriptions
+    this.pendingAdd = {};
+    this.pendingRemove = {};
+
+    this.connection.on('close', function () {
+      // Our connection is closed, Prepare for the connection to re-open. Cache
+      // the subscription keys we are currently subscribed to, and teardown all
+      // existing objects.
+      var current = _this.active;
+
+      _this.objects.updateKeys({
+        remove: Object.keys(_this.active),
+        add: []
+      });
+      _this.active = {};
+
+      // When we re-open, we want to re-subscribe to correct collection of keys.
+      // Resolve the .pendingAdd and .pendingRemove objects.
+      var _iteratorNormalCompletion = true;
+      var _didIteratorError = false;
+      var _iteratorError = undefined;
+
+      try {
+        for (var _iterator = Object.keys(_this.pendingRemove)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+          var key = _step.value;
+
+          if (current.hasOwnProperty(key)) delete current[key];
+        }
+      } catch (err) {
+        _didIteratorError = true;
+        _iteratorError = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion && _iterator.return) {
+            _iterator.return();
+          }
+        } finally {
+          if (_didIteratorError) {
+            throw _iteratorError;
+          }
+        }
+      }
+
+      var _iteratorNormalCompletion2 = true;
+      var _didIteratorError2 = false;
+      var _iteratorError2 = undefined;
+
+      try {
+        for (var _iterator2 = Object.keys(_this.pendingAdd)[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+          var _key = _step2.value;
+
+          current[_key] = true;
+        } // We know the collection of keys that we would like to be subscribed to.
+      } catch (err) {
+        _didIteratorError2 = true;
+        _iteratorError2 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion2 && _iterator2.return) {
+            _iterator2.return();
+          }
+        } finally {
+          if (_didIteratorError2) {
+            throw _iteratorError2;
+          }
+        }
+      }
+
+      _this.pendingAdd = current;
+      _this.pendingRemove = {};
+    });
+
+    this.connection.on('open', function () {
+      _this.resolve();
+    });
+  }
+
+  /**
+   * Given a set of keys that we want to subscribe to, calculate the difference
+   * between the currently active subscription and the new desired subscription.
+   * Store the result in this.pendingAdd and this.pendingRemove.
+   *
+   * @param {string[]} keys - all the keys that we want to subscribe to.
+   */
+
+
+  _createClass(Synk, [{
+    key: 'setSubscription',
+    value: function setSubscription(keys) {
+      this.pendingAdd = {};
+      this.pendingRemove = {};
+
+      var newKeys = {};
+
+      // convert keys array to object
+      var _iteratorNormalCompletion3 = true;
+      var _didIteratorError3 = false;
+      var _iteratorError3 = undefined;
+
+      try {
+        for (var _iterator3 = keys[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+          var key = _step3.value;
+          newKeys[key] = true;
+        } // for each current key, check if we want to unsubscribe
+      } catch (err) {
+        _didIteratorError3 = true;
+        _iteratorError3 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion3 && _iterator3.return) {
+            _iterator3.return();
+          }
+        } finally {
+          if (_didIteratorError3) {
+            throw _iteratorError3;
+          }
+        }
+      }
+
+      var _iteratorNormalCompletion4 = true;
+      var _didIteratorError4 = false;
+      var _iteratorError4 = undefined;
+
+      try {
+        for (var _iterator4 = Object.keys(this.active)[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+          var activeKey = _step4.value;
+
+          if (!newKeys.hasOwnProperty(activeKey)) {
+            // we have a key that we do not want.
+            this.pendingRemove[activeKey] = true;
+          }
+        }
+
+        // For each new key, check if we have to add it
+      } catch (err) {
+        _didIteratorError4 = true;
+        _iteratorError4 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion4 && _iterator4.return) {
+            _iterator4.return();
+          }
+        } finally {
+          if (_didIteratorError4) {
+            throw _iteratorError4;
+          }
+        }
+      }
+
+      var _iteratorNormalCompletion5 = true;
+      var _didIteratorError5 = false;
+      var _iteratorError5 = undefined;
+
+      try {
+        for (var _iterator5 = keys[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
+          var newKey = _step5.value;
+
+          if (!this.active.hasOwnProperty(newKey)) {
+            // a key needs to be added
+            this.pendingAdd[newKey] = true;
+          }
+        }
+      } catch (err) {
+        _didIteratorError5 = true;
+        _iteratorError5 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion5 && _iterator5.return) {
+            _iterator5.return();
+          }
+        } finally {
+          if (_didIteratorError5) {
+            throw _iteratorError5;
+          }
+        }
+      }
+    }
+
+    /**
+     * Try to resolve the subscription. If the subscription message is not sent
+     * successfully, it will be sent when the connection re-opens.
+     * 
+     * @return {bool} - true if the message was sent or no change is needed
+     */
+
+  }, {
+    key: 'resolve',
+    value: function resolve() {
+      var msg = {
+        method: 'updateSubscription',
+        add: Object.keys(this.pendingAdd),
+        remove: Object.keys(this.pendingRemove)
+      };
+
+      // If msg.add and msg.remove are empty, our job is done.
+      if (msg.add.length === 0 && msg.remove.length === 0) return true;
+
+      // If the connection is not open, do nothing (wait for open event)
+      if (this.connection.state !== 1) return false;
+      // The connection is known to be open
+
+      this.objects.updateKeys(msg);
+      this.connection.send(msg);
+
+      var _iteratorNormalCompletion6 = true;
+      var _didIteratorError6 = false;
+      var _iteratorError6 = undefined;
+
+      try {
+        for (var _iterator6 = msg.add[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
+          var key = _step6.value;
+
+          this.active[key] = true;
+        }
+      } catch (err) {
+        _didIteratorError6 = true;
+        _iteratorError6 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion6 && _iterator6.return) {
+            _iterator6.return();
+          }
+        } finally {
+          if (_didIteratorError6) {
+            throw _iteratorError6;
+          }
+        }
+      }
+
+      var _iteratorNormalCompletion7 = true;
+      var _didIteratorError7 = false;
+      var _iteratorError7 = undefined;
+
+      try {
+        for (var _iterator7 = msg.remove[Symbol.iterator](), _step7; !(_iteratorNormalCompletion7 = (_step7 = _iterator7.next()).done); _iteratorNormalCompletion7 = true) {
+          var _key2 = _step7.value;
+
+          if (this.active.hasOwnProperty(_key2)) delete this.active[_key2];
+        }
+      } catch (err) {
+        _didIteratorError7 = true;
+        _iteratorError7 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion7 && _iterator7.return) {
+            _iterator7.return();
+          }
+        } finally {
+          if (_didIteratorError7) {
+            throw _iteratorError7;
+          }
+        }
+      }
+
+      this.pendingAdd = {};
+      this.pendingRemove = {};
+
+      return true;
+    }
+  }]);
+
+  return Synk;
+}();
+
+exports.default = Synk;
 
 /***/ })
 /******/ ]);
