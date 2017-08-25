@@ -15,6 +15,8 @@ export default class Synk {
     this.objects = new Objects();
     this.connection = new Connection(url);
 
+    this.objects.subscribe(this.connection.stream);
+
     this.active = {}; // currently active subscriptions
     this.pendingAdd = {};
     this.pendingRemove = {};
