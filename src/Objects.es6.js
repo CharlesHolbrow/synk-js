@@ -17,10 +17,10 @@ export default class Objects extends Endpoint {
   /**
    * Update the set of keys that we are subscribed to.
    *
-   * Note that this is usually called from the client. We should be able to call
-   * this from the server, but this behavior is untested. To get this working,
-   * we would have to have this function mutate the mapSubscription (currently
-   * the mapSubscription methods call this, not the other way around)
+   * Note that this is usually called from client via the synk.resolve() method.
+   * We should be able to call this from the server, but this behavior is
+   * untested. I have not thought through the logic of how this could be called
+   * from the server.
    *
    * @param {Object} updateSubscriptionMsg - Object containing subscription
    *        change. The object must have two arrays of strings: .add and .remove
@@ -56,6 +56,11 @@ export default class Objects extends Endpoint {
 
   /**
    * Create a new object. Typically called from the server.
+   *
+   * Note that when we add an object, the .id and .key properties are
+   * automatically set. The Objects class depends on these being available
+   * when removing the object, so they should not be changed by client code.
+   *
    * @param {Object} msg - contains .key, .state, .sKey. Optional .psKey
    *        indicates object moved here from another chunk.
    */
@@ -81,6 +86,8 @@ export default class Objects extends Endpoint {
     }
 
     obj = new collection.class(msg.key, msg.state);
+    obj.id = id;
+    obj.key = msg.key;
 
     chunk.setLeaf(msg.key, obj);
     collection.setLeaf(id, obj);
