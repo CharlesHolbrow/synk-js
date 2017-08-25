@@ -1077,14 +1077,17 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 /**
- * Synk wraps a connection and an Objects subscription.
+ * Synk represents a connection to the synk server. Its responsibilities:
+ * - create a connection to the server
+ * - track a set of subscriptions keys
+ * - store objects retrieved from the server
+ *
+ * The objects stored in this.objects will stay up-to-date with the copies on
+ * the server.
  */
 var Synk = function () {
   /**
    * @arg {string} url - the websocket url to connect to
-   * @arg {[class]} webSocketStub - optional class to use instead of WebSocket.
-   *      Useful for testing inside of Node.js. Probably not needed in an
-   *      application.
    */
   function Synk(url) {
     var _this = this;
@@ -1112,8 +1115,8 @@ var Synk = function () {
       });
       _this.active = {};
 
-      // When we re-open, we want to re-subscribe to correct collection of keys.
-      // Resolve the .pendingAdd and .pendingRemove objects.
+      // When we re-open, we want to re-subscribe to the correct collection of
+      // keys. Resolve the .pendingAdd and .pendingRemove objects.
       var _iteratorNormalCompletion = true;
       var _didIteratorError = false;
       var _iteratorError = undefined;
@@ -1275,8 +1278,9 @@ var Synk = function () {
     }
 
     /**
-     * Try to resolve the subscription. If the subscription message is not sent
-     * successfully, it will be sent when the connection re-opens.
+     * Try to resolve the subscription. If socket is not open, this will have no
+     * effect. Note that resolve is always called when the connection opens or re-
+     * opens.
      * 
      * @return {bool} - true if the message was sent or no change is needed
      */

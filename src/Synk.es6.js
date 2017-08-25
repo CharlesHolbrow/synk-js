@@ -2,14 +2,17 @@ import Objects from './Objects';
 import Connection from './Connection';
 
 /**
- * Synk wraps a connection and an Objects subscription.
+ * Synk represents a connection to the synk server. Its responsibilities:
+ * - create a connection to the server
+ * - track a set of subscriptions keys
+ * - store objects retrieved from the server
+ *
+ * The objects stored in this.objects will stay up-to-date with the copies on
+ * the server.
  */
 export default class Synk {
   /**
    * @arg {string} url - the websocket url to connect to
-   * @arg {[class]} webSocketStub - optional class to use instead of WebSocket.
-   *      Useful for testing inside of Node.js. Probably not needed in an
-   *      application.
    */
   constructor(url) {
     this.objects = new Objects();
@@ -33,8 +36,8 @@ export default class Synk {
       });
       this.active = {};
 
-      // When we re-open, we want to re-subscribe to correct collection of keys.
-      // Resolve the .pendingAdd and .pendingRemove objects.
+      // When we re-open, we want to re-subscribe to the correct collection of
+      // keys. Resolve the .pendingAdd and .pendingRemove objects.
       for (const key of Object.keys(this.pendingRemove))
         if (current.hasOwnProperty(key)) delete current[key];
 
@@ -85,8 +88,9 @@ export default class Synk {
   }
 
   /**
-   * Try to resolve the subscription. If the subscription message is not sent
-   * successfully, it will be sent when the connection re-opens.
+   * Try to resolve the subscription. If socket is not open, this will have no
+   * effect. Note that resolve is always called when the connection opens or re-
+   * opens.
    * 
    * @return {bool} - true if the message was sent or no change is needed
    */
