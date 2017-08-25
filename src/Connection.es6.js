@@ -79,7 +79,7 @@ export default class Connection extends Emitter {
 
       this._connectionCount += 1;
       if (this._connectionCount === 1) {
-        // If this is our first time connecting, play send qued messages
+        // If this is our first time connecting, send qued messages
         while (this._messageQue.length) {
           this.send(this._messageQue[0]);
           this._messageQue.shift();

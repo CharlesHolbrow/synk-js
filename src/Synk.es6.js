@@ -18,6 +18,35 @@ export default class Synk {
     this.active = {}; // currently active subscriptions
     this.pendingAdd = {};
     this.pendingRemove = {};
+
+    this.connection.on('close', () => {
+      // Our connection is closed, Prepare for the connection to re-open. Cache
+      // the subscription keys we are currently subscribed to, and teardown all
+      // existing objects.
+      const current = this.active;
+
+      this.objects.updateKeys({
+        remove: Object.keys(this.active),
+        add: [],
+      });
+      this.active = {};
+
+      // When we re-open, we want to re-subscribe to correct collection of keys.
+      // Resolve the .pendingAdd and .pendingRemove objects.
+      for (const key of Object.keys(this.pendingRemove))
+        if (current.hasOwnProperty(key)) delete current[key];
+
+      for (const key of Object.keys(this.pendingAdd))
+        current[key] = true;
+
+      // We know the collection of keys that we would like to be subscribed to.
+      this.pendingAdd = current;
+      this.pendingRemove = {};
+    });
+
+    this.connection.on('open', () => {
+      this.resolve();
+    });
   }
 
   /**
@@ -54,15 +83,37 @@ export default class Synk {
   }
 
   /**
-   * Try to resolve the subscription. 
+   * Try to resolve the subscription. If the subscription message is not sent
+   * successfully, it will be sent when the connection re-opens.
    * 
-   * Resolve returns the result of the call to connection.send(). If the
-   * subscription message is not sent successfully, it will be sent when the
-   * connection re-opens.
+   * @return {bool} - true if the message was sent or no change is needed
    */
   resolve() {
+    const msg = {
+      method: 'updateSubscription',
+      add: Object.keys(this.pendingAdd),
+      remove: Object.keys(this.pendingRemove),
+    };
 
+    // If msg.add and msg.remove are empty, our job is done.
+    if (msg.add.length === 0 && msg.remove.length === 0) return true;
 
+    // If the connection is not open, do nothing (wait for open event)
+    if (this.connection.state !== 1) return false;
+    // The connection is known to be open
 
+    this.objects.updateKeys(msg);
+    this.connection.send(msg);
+
+    for (const key of msg.add)
+      this.active[key] = true;
+
+    for (const key of msg.remove)
+      if (this.active.hasOwnProperty(key)) delete this.active[key];
+
+    this.pendingAdd = {};
+    this.pendingRemove = {};
+
+    return true;
   }
 }
