@@ -5,7 +5,7 @@ import Objects from './Objects';
 
 describe('Synk', function() {
   describe('updateSubscription', function() {
-    const s = new Synk();
+    const s = new Synk('ws://127.0.0.1:3000/ws');
 
     it('should add new subscription to the .pendingAdd member', function() {
       s.setSubscription(['a', 'b']);

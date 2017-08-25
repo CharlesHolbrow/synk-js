@@ -9,12 +9,12 @@ module.exports = {
     extensions: [".js", ".json", ".es6.js"],
     // Stub WebSocket
     alias: {
-      WebSocket: 'eventemitter3',
+      WebSocket: path.resolve(__dirname, 'src/WebSocketStub.es6.js'),
     },
   },
   plugins: [
     // Stub Websocket for testing
-    new webpack.ProvidePlugin({ 'WebSocket': 'WebSocket' }),
+    new webpack.ProvidePlugin({ 'WebSocket': ['WebSocket', 'default'] }),
   ],
   module: {
     rules: [
