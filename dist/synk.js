@@ -998,6 +998,28 @@ var Objects = function (_Endpoint) {
 
       if (obj) obj.teardown();else console.error('DANGER: Tried to remove ' + msg.key + ', but could not find object');
     }
+
+    /**
+     * Get an object from this synk collection. This may return null if the object
+     * was not found.
+     *
+     * @param {string} key - the full key of the object we want
+     * @returns {Object|null} - the object if it exists, or null
+     */
+
+  }, {
+    key: 'get',
+    value: function get(key) {
+      var _byKey5;
+
+      var parts = key.split(':');
+      var id = parts.pop();
+      var collection = (_byKey5 = this.byKey).getBranch.apply(_byKey5, _toConsumableArray(parts));
+
+      if (!collection) return null;
+
+      return collection.getLeaf(id) || null;
+    }
   }]);
 
   return Objects;
