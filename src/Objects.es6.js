@@ -177,4 +177,21 @@ export default class Objects extends Endpoint {
     if (obj) obj.teardown();
     else console.error(`DANGER: Tried to remove ${msg.key}, but could not find object`);
   }
+
+  /**
+   * Get an object from this synk collection. This may return null if the object
+   * was not found.
+   *
+   * @param {string} key - the full key of the object we want
+   * @returns {Object|null} - the object if it exists, or null
+   */
+  get(key) {
+    const parts = key.split(':');
+    const id = parts.pop();
+    const collection = this.byKey.getBranch(...parts);
+
+    if (!collection) return null;
+
+    return collection.getLeaf(id) || null;
+  }
 }
