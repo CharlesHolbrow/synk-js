@@ -1,3 +1,4 @@
+import Emitter from 'eventemitter3';
 import Kefir from 'kefir';
 
 /**
@@ -9,11 +10,12 @@ import Kefir from 'kefir';
 *
 * An endpoint instance may only listen to one class at a time
 */
-export default class Endpoint {
+export default class Endpoint extends Emitter {
   /**
   * Create an Endpoint. Usually this will be called via super()
   */
   constructor() {
+    super();
     this._subsciption = null;
     this._inputStream = null;
     this._unhandledStream = null;

@@ -1,5 +1,3 @@
-import Emitter from 'eventemitter3';
-
 import Endpoint from './Endpoint';
 import Branch from './Branch';
 
@@ -30,6 +28,10 @@ import Branch from './Branch';
  * NOTE:
  * - When adding an object first we create it, then we emit it
  * - When removing an object first we emit it, then we .teardown()
+ *
+ *  @event add
+ *  @event mod
+ *  @event rem
  */
 export default class Objects extends Endpoint {
   /**
@@ -39,15 +41,6 @@ export default class Objects extends Endpoint {
     super();
     this.bySKey = new Branch();
     this.byKey = new Branch();
-
-    /**
-     * @member emitter
-     * events:
-     * - 'add'
-     * - 'rem'
-     * - 'mod'
-     */
-    this.emitter = new Emitter();
   }
 
   /**
@@ -81,7 +74,7 @@ export default class Objects extends Endpoint {
         if (collection) collection.removeLeaf(id);
         else console.error(`Unsubscribed from chunk, but collection not found: ${parts.join(':')}`);
 
-        this.emitter.emit('rem', leaf, null);
+        this.emit('rem', leaf, null);
         leaf.teardown();
       });
     });
@@ -129,7 +122,7 @@ export default class Objects extends Endpoint {
     chunk.setLeaf(msg.key, obj);
     collection.setLeaf(id, obj);
 
-    this.emitter.emit('add', obj, msg);
+    this.emit('add', obj, msg);
   }
 
   /**
@@ -169,7 +162,7 @@ export default class Objects extends Endpoint {
     // Are we modifying within a chunk?
     if (!msg.nsKey) {
       obj.update(msg.diff);
-      this.emitter.emit('mod', obj, msg);
+      this.emit('mod', obj, msg);
 
       return;
     }
@@ -184,10 +177,10 @@ export default class Objects extends Endpoint {
     if (newChunk) {
       newChunk.setLeaf(msg.key, obj);
       obj.update(msg.diff);
-      this.emitter.emit('mod', obj, msg);
+      this.emit('mod', obj, msg);
     } else {
       collection.removeLeaf(id);
-      this.emitter.emit('rem', obj, msg);
+      this.emit('rem', obj, msg);
       obj.teardown();
     }
 
@@ -218,7 +211,7 @@ export default class Objects extends Endpoint {
     else console.error(`Tried to remove ${msg.key} but could not find ${parts} in .byKey`);
 
     if (obj) {
-      this.emitter.emit('rem', obj, msg);
+      this.emit('rem', obj, msg);
       obj.teardown();
     } else console.error(`DANGER: Tried to remove ${msg.key}, but could not find object`);
   }
