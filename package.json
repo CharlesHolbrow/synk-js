@@ -36,5 +36,6 @@
   "peerDependencies": {
     "eventemitter3": "^2.0.3",
     "kefir": "^3.7.2"
-  }
+  },
+  "license": "UNLICENSED"
 }
