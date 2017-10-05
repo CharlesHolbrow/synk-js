@@ -1,8 +1,35 @@
+import Emitter from 'eventemitter3';
+
 import Endpoint from './Endpoint';
 import Branch from './Branch';
 
 /**
- * Store a collection of objects that will be synchronized with the server
+ * Store a collection of objects that will be synchronized with the server.
+ * The lifecycle of an object is
+ * 1. receive addObj message from server
+ *     - create `new constructor(key, state, this)`
+ *     - add to objects .byKey an .bySKey branches
+ *     - emit('add', obj, addObjMessage)
+ * 2. receive modObj message from server (0 or more times)
+ *   If the object is not moving hunks
+ *     - call objects .update(state) method
+ *     - emit('mod', obj, msg)
+ *   Or if the object is moving to a hunk we are subscribed to
+ *     - move the object to a different subscription key
+ *     - call objects .update(state) method
+ *     - emit('mod', obj, msg)
+ *   Or if the object is moving to a area we are not subscribed to
+ *     - remove the object
+ *     - emit('rem', obj, msg)
+ *     - obj.teardown() method
+ * 3. receive remObj message from server OR unsubscribe from hunk
+ *    - remove object
+ *    - emit('rem', obj, msg) // msg will be null if we unsubscribed
+ *    - obj.teardown()
+ *
+ * NOTE:
+ * - When adding an object first we create it, then we emit it
+ * - When removing an object first we emit it, then we .teardown()
  */
 export default class Objects extends Endpoint {
   /**
@@ -12,6 +39,15 @@ export default class Objects extends Endpoint {
     super();
     this.bySKey = new Branch();
     this.byKey = new Branch();
+
+    /**
+     * @member emitter
+     * events:
+     * - 'add'
+     * - 'rem'
+     * - 'mod'
+     */
+    this.emitter = new Emitter();
   }
 
   /**
@@ -45,6 +81,7 @@ export default class Objects extends Endpoint {
         if (collection) collection.removeLeaf(id);
         else console.error(`Unsubscribed from chunk, but collection not found: ${parts.join(':')}`);
 
+        this.emitter.emit('rem', leaf, null);
         leaf.teardown();
       });
     });
@@ -82,7 +119,7 @@ export default class Objects extends Endpoint {
     if (obj) {
       console.error('The server sent us an addObj message, but we alredy had '
       + `the object locally: ${msg.key}`);
-      throw new Error('TODO: remove and teardown c'); // TODO: remove and teardown c intead of throwing an error
+      throw new Error('TODO: remove and teardown c'); // TODO: Should we remove and teardown c intead of throwing an error??
     }
 
     obj = new collection.class(msg.key, msg.state, this);
@@ -91,6 +128,8 @@ export default class Objects extends Endpoint {
 
     chunk.setLeaf(msg.key, obj);
     collection.setLeaf(id, obj);
+
+    this.emitter.emit('add', obj, msg);
   }
 
   /**
@@ -114,7 +153,8 @@ export default class Objects extends Endpoint {
     // Do some sanity checks...
 
     if (!obj) {
-      console.error('We received a modObj request, but could not find the '
+      // this is just a warning, because it will just happen occasionally.
+      console.warn('We received a modObj request, but could not find the '
       + `object locally: ${msg.key}`);
 
       return;
@@ -129,6 +169,7 @@ export default class Objects extends Endpoint {
     // Are we modifying within a chunk?
     if (!msg.nsKey) {
       obj.update(msg.diff);
+      this.emitter.emit('mod', obj, msg);
 
       return;
     }
@@ -143,8 +184,10 @@ export default class Objects extends Endpoint {
     if (newChunk) {
       newChunk.setLeaf(msg.key, obj);
       obj.update(msg.diff);
+      this.emitter.emit('mod', obj, msg);
     } else {
       collection.removeLeaf(id);
+      this.emitter.emit('rem', obj, msg);
       obj.teardown();
     }
 
@@ -174,15 +217,17 @@ export default class Objects extends Endpoint {
     if (collection) collection.removeLeaf(id);
     else console.error(`Tried to remove ${msg.key} but could not find ${parts} in .byKey`);
 
-    if (obj) obj.teardown();
-    else console.error(`DANGER: Tried to remove ${msg.key}, but could not find object`);
+    if (obj) {
+      this.emitter.emit('rem', obj, msg);
+      obj.teardown();
+    } else console.error(`DANGER: Tried to remove ${msg.key}, but could not find object`);
   }
 
   /**
    * Get an object from this synk collection. This may return null if the object
    * was not found.
    *
-   * @param {string} key - the full key of the object we want
+   * @param {string} key - the full key of the object we want 'type:key:id'
    * @returns {Object|null} - the object if it exists, or null
    */
   get(key) {

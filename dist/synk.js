@@ -1,13 +1,13 @@
 (function webpackUniversalModuleDefinition(root, factory) {
 	if(typeof exports === 'object' && typeof module === 'object')
-		module.exports = factory(require("kefir"), require("eventemitter3"));
+		module.exports = factory(require("eventemitter3"), require("kefir"));
 	else if(typeof define === 'function' && define.amd)
 		define([, ], factory);
 	else if(typeof exports === 'object')
-		exports["synk"] = factory(require("kefir"), require("eventemitter3"));
+		exports["synk"] = factory(require("eventemitter3"), require("kefir"));
 	else
 		root["synk"] = factory(root[undefined], root[undefined]);
-})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_6__) {
+})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_2__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -70,7 +70,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 5);
+/******/ 	return __webpack_require__(__webpack_require__.s = 6);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -86,11 +86,11 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _eventemitter = __webpack_require__(6);
+var _eventemitter = __webpack_require__(1);
 
 var _eventemitter2 = _interopRequireDefault(_eventemitter);
 
-var _kefir = __webpack_require__(1);
+var _kefir = __webpack_require__(2);
 
 var _kefir2 = _interopRequireDefault(_kefir);
 
@@ -294,6 +294,12 @@ module.exports = __WEBPACK_EXTERNAL_MODULE_1__;
 
 /***/ }),
 /* 2 */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE_2__;
+
+/***/ }),
+/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -305,7 +311,7 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _kefir = __webpack_require__(1);
+var _kefir = __webpack_require__(2);
 
 var _kefir2 = _interopRequireDefault(_kefir);
 
@@ -408,7 +414,7 @@ var Endpoint = function () {
 exports.default = Endpoint;
 
 /***/ }),
-/* 3 */
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -771,7 +777,7 @@ var Branch = function () {
 exports.default = Branch;
 
 /***/ }),
-/* 4 */
+/* 5 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -783,11 +789,15 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _Endpoint2 = __webpack_require__(2);
+var _eventemitter = __webpack_require__(1);
+
+var _eventemitter2 = _interopRequireDefault(_eventemitter);
+
+var _Endpoint2 = __webpack_require__(3);
 
 var _Endpoint3 = _interopRequireDefault(_Endpoint2);
 
-var _Branch = __webpack_require__(3);
+var _Branch = __webpack_require__(4);
 
 var _Branch2 = _interopRequireDefault(_Branch);
 
@@ -802,7 +812,32 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
 /**
- * Store a collection of objects that will be synchronized with the server
+ * Store a collection of objects that will be synchronized with the server.
+ * The lifecycle of an object is
+ * 1. receive addObj message from server
+ *     - create `new constructor(key, state, this)`
+ *     - add to objects .byKey an .bySKey branches
+ *     - emit('add', obj, addObjMessage)
+ * 2. receive modObj message from server (0 or more times)
+ *   If the object is not moving hunks
+ *     - call objects .update(state) method
+ *     - emit('mod', obj, msg)
+ *   Or if the object is moving to a hunk we are subscribed to
+ *     - move the object to a different subscription key
+ *     - call objects .update(state) method
+ *     - emit('mod', obj, msg)
+ *   Or if the object is moving to a area we are not subscribed to
+ *     - remove the object
+ *     - emit('rem', obj, msg)
+ *     - obj.teardown() method
+ * 3. receive remObj message from server OR unsubscribe from hunk
+ *    - remove object
+ *    - emit('rem', obj, msg) // msg will be null if we unsubscribed
+ *    - obj.teardown()
+ *
+ * NOTE:
+ * - When adding an object first we create it, then we emit it
+ * - When removing an object first we emit it, then we .teardown()
  */
 var Objects = function (_Endpoint) {
   _inherits(Objects, _Endpoint);
@@ -817,6 +852,15 @@ var Objects = function (_Endpoint) {
 
     _this.bySKey = new _Branch2.default();
     _this.byKey = new _Branch2.default();
+
+    /**
+     * @member emitter
+     * events:
+     * - 'add'
+     * - 'rem'
+     * - 'mod'
+     */
+    _this.emitter = new _eventemitter2.default();
     return _this;
   }
 
@@ -857,6 +901,7 @@ var Objects = function (_Endpoint) {
           // If the collection doesn't exist, we have bug
           if (collection) collection.removeLeaf(id);else console.error('Unsubscribed from chunk, but collection not found: ' + parts.join(':'));
 
+          _this2.emitter.emit('rem', leaf, null);
           leaf.teardown();
         });
       });
@@ -898,7 +943,7 @@ var Objects = function (_Endpoint) {
 
       if (obj) {
         console.error('The server sent us an addObj message, but we alredy had ' + ('the object locally: ' + msg.key));
-        throw new Error('TODO: remove and teardown c'); // TODO: remove and teardown c intead of throwing an error
+        throw new Error('TODO: remove and teardown c'); // TODO: Should we remove and teardown c intead of throwing an error??
       }
 
       obj = new collection.class(msg.key, msg.state, this);
@@ -907,6 +952,8 @@ var Objects = function (_Endpoint) {
 
       chunk.setLeaf(msg.key, obj);
       collection.setLeaf(id, obj);
+
+      this.emitter.emit('add', obj, msg);
     }
 
     /**
@@ -935,7 +982,8 @@ var Objects = function (_Endpoint) {
       // Do some sanity checks...
 
       if (!obj) {
-        console.error('We received a modObj request, but could not find the ' + ('object locally: ' + msg.key));
+        // this is just a warning, because it will just happen occasionally.
+        console.warn('We received a modObj request, but could not find the ' + ('object locally: ' + msg.key));
 
         return;
       }
@@ -948,6 +996,7 @@ var Objects = function (_Endpoint) {
       // Are we modifying within a chunk?
       if (!msg.nsKey) {
         obj.update(msg.diff);
+        this.emitter.emit('mod', obj, msg);
 
         return;
       }
@@ -962,8 +1011,10 @@ var Objects = function (_Endpoint) {
       if (newChunk) {
         newChunk.setLeaf(msg.key, obj);
         obj.update(msg.diff);
+        this.emitter.emit('mod', obj, msg);
       } else {
         collection.removeLeaf(id);
+        this.emitter.emit('rem', obj, msg);
         obj.teardown();
       }
 
@@ -996,14 +1047,17 @@ var Objects = function (_Endpoint) {
 
       if (collection) collection.removeLeaf(id);else console.error('Tried to remove ' + msg.key + ' but could not find ' + parts + ' in .byKey');
 
-      if (obj) obj.teardown();else console.error('DANGER: Tried to remove ' + msg.key + ', but could not find object');
+      if (obj) {
+        this.emitter.emit('rem', obj, msg);
+        obj.teardown();
+      } else console.error('DANGER: Tried to remove ' + msg.key + ', but could not find object');
     }
 
     /**
      * Get an object from this synk collection. This may return null if the object
      * was not found.
      *
-     * @param {string} key - the full key of the object we want
+     * @param {string} key - the full key of the object we want 'type:key:id'
      * @returns {Object|null} - the object if it exists, or null
      */
 
@@ -1028,7 +1082,7 @@ var Objects = function (_Endpoint) {
 exports.default = Objects;
 
 /***/ }),
-/* 5 */
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1043,15 +1097,15 @@ var _Connection = __webpack_require__(0);
 
 var _Connection2 = _interopRequireDefault(_Connection);
 
-var _Endpoint = __webpack_require__(2);
+var _Endpoint = __webpack_require__(3);
 
 var _Endpoint2 = _interopRequireDefault(_Endpoint);
 
-var _Branch = __webpack_require__(3);
+var _Branch = __webpack_require__(4);
 
 var _Branch2 = _interopRequireDefault(_Branch);
 
-var _Objects = __webpack_require__(4);
+var _Objects = __webpack_require__(5);
 
 var _Objects2 = _interopRequireDefault(_Objects);
 
@@ -1068,12 +1122,6 @@ exports.Objects = _Objects2.default;
 exports.Synk = _Synk2.default;
 
 /***/ }),
-/* 6 */
-/***/ (function(module, exports) {
-
-module.exports = __WEBPACK_EXTERNAL_MODULE_6__;
-
-/***/ }),
 /* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -1086,7 +1134,7 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _Objects = __webpack_require__(4);
+var _Objects = __webpack_require__(5);
 
 var _Objects2 = _interopRequireDefault(_Objects);
 
