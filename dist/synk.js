@@ -311,6 +311,10 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+var _eventemitter = __webpack_require__(1);
+
+var _eventemitter2 = _interopRequireDefault(_eventemitter);
+
 var _kefir = __webpack_require__(2);
 
 var _kefir2 = _interopRequireDefault(_kefir);
@@ -318,6 +322,10 @@ var _kefir2 = _interopRequireDefault(_kefir);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
 /**
 * Base for classes that respond to a stream.
@@ -328,17 +336,22 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 *
 * An endpoint instance may only listen to one class at a time
 */
-var Endpoint = function () {
+var Endpoint = function (_Emitter) {
+  _inherits(Endpoint, _Emitter);
+
   /**
   * Create an Endpoint. Usually this will be called via super()
   */
   function Endpoint() {
     _classCallCheck(this, Endpoint);
 
-    this._subsciption = null;
-    this._inputStream = null;
-    this._unhandledStream = null;
-    this.unhandled = new _kefir2.default.Pool();
+    var _this = _possibleConstructorReturn(this, (Endpoint.__proto__ || Object.getPrototypeOf(Endpoint)).call(this));
+
+    _this._subsciption = null;
+    _this._inputStream = null;
+    _this._unhandledStream = null;
+    _this.unhandled = new _kefir2.default.Pool();
+    return _this;
   }
 
   /**
@@ -357,7 +370,7 @@ var Endpoint = function () {
   _createClass(Endpoint, [{
     key: 'subscribe',
     value: function subscribe(stream) {
-      var _this = this;
+      var _this2 = this;
 
       if (this._subsciption) this._subsciption.unsubscribe();
 
@@ -373,10 +386,10 @@ var Endpoint = function () {
       // We observe this stream, and leave a reference to the subscription so we
       // can unsubscribe if we are passed different stream to monitor.
       this._subsciption = stream.filter(function (msg) {
-        return typeof _this[msg.method] === 'function';
+        return typeof _this2[msg.method] === 'function';
       }).observe({
         value: function value(msg) {
-          _this[msg.method](msg);
+          _this2[msg.method](msg);
         },
         error: function error(msg) {
           console.error(msg);
@@ -390,7 +403,7 @@ var Endpoint = function () {
       // .output stream. Keep a reference to the unhandled stream so we can unplug
       // it from the output pool when we subscribe to a new stream.
       this._unhandledStream = stream.filter(function (msg) {
-        return typeof _this[msg.method] !== 'function';
+        return typeof _this2[msg.method] !== 'function';
       });
       this.unhandled.plug(this._unhandledStream);
     }
@@ -409,7 +422,7 @@ var Endpoint = function () {
   }]);
 
   return Endpoint;
-}();
+}(_eventemitter2.default);
 
 exports.default = Endpoint;
 
@@ -789,10 +802,6 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _eventemitter = __webpack_require__(1);
-
-var _eventemitter2 = _interopRequireDefault(_eventemitter);
-
 var _Endpoint2 = __webpack_require__(3);
 
 var _Endpoint3 = _interopRequireDefault(_Endpoint2);
@@ -838,6 +847,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
  * NOTE:
  * - When adding an object first we create it, then we emit it
  * - When removing an object first we emit it, then we .teardown()
+ *
+ *  @event add
+ *  @event mod
+ *  @event rem
  */
 var Objects = function (_Endpoint) {
   _inherits(Objects, _Endpoint);
@@ -852,15 +865,6 @@ var Objects = function (_Endpoint) {
 
     _this.bySKey = new _Branch2.default();
     _this.byKey = new _Branch2.default();
-
-    /**
-     * @member emitter
-     * events:
-     * - 'add'
-     * - 'rem'
-     * - 'mod'
-     */
-    _this.emitter = new _eventemitter2.default();
     return _this;
   }
 
@@ -901,7 +905,7 @@ var Objects = function (_Endpoint) {
           // If the collection doesn't exist, we have bug
           if (collection) collection.removeLeaf(id);else console.error('Unsubscribed from chunk, but collection not found: ' + parts.join(':'));
 
-          _this2.emitter.emit('rem', leaf, null);
+          _this2.emit('rem', leaf, null);
           leaf.teardown();
         });
       });
@@ -953,7 +957,7 @@ var Objects = function (_Endpoint) {
       chunk.setLeaf(msg.key, obj);
       collection.setLeaf(id, obj);
 
-      this.emitter.emit('add', obj, msg);
+      this.emit('add', obj, msg);
     }
 
     /**
@@ -996,7 +1000,7 @@ var Objects = function (_Endpoint) {
       // Are we modifying within a chunk?
       if (!msg.nsKey) {
         obj.update(msg.diff);
-        this.emitter.emit('mod', obj, msg);
+        this.emit('mod', obj, msg);
 
         return;
       }
@@ -1011,10 +1015,10 @@ var Objects = function (_Endpoint) {
       if (newChunk) {
         newChunk.setLeaf(msg.key, obj);
         obj.update(msg.diff);
-        this.emitter.emit('mod', obj, msg);
+        this.emit('mod', obj, msg);
       } else {
         collection.removeLeaf(id);
-        this.emitter.emit('rem', obj, msg);
+        this.emit('rem', obj, msg);
         obj.teardown();
       }
 
@@ -1048,7 +1052,7 @@ var Objects = function (_Endpoint) {
       if (collection) collection.removeLeaf(id);else console.error('Tried to remove ' + msg.key + ' but could not find ' + parts + ' in .byKey');
 
       if (obj) {
-        this.emitter.emit('rem', obj, msg);
+        this.emit('rem', obj, msg);
         obj.teardown();
       } else console.error('DANGER: Tried to remove ' + msg.key + ', but could not find object');
     }
