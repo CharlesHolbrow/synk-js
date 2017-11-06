@@ -41,6 +41,14 @@ export default class Objects extends Endpoint {
     super();
     this.bySKey = new Branch();
     this.byKey = new Branch();
+
+    // queuedMessages is for storing messages that target an object that we have
+    // not yet received. Messages that arrive out of order after addObj has been
+    // received should be stored on the object itself, so they can be garbage
+    // collected correctly.
+    // As of November 5, 2017, unordered modObj messages that arrive after addObj
+    // are not supported. However, support may be added in the future.
+    this.queuedMessages = {};
   }
 
   /**
@@ -87,12 +95,12 @@ export default class Objects extends Endpoint {
   /**
    * Create a new object. Typically called from the server.
    *
-   * Note that when we add an object, the .id and .key properties are
+   * Note that when we add an object, the .id .key and .v properties are
    * automatically set. The Objects class depends on these being available
    * when removing the object, so they should not be changed by client code.
    *
-   * @param {Object} msg - contains .key, .state, .sKey. Optional .psKey
-   *        indicates object moved here from another chunk.
+   * @param {Object} msg - contains .key, .state, .sKey. The presence of .psKey
+   *        indicates this object moved here from another chunk.
    */
   addObj(msg) {
     if (typeof msg.sKey !== 'string' || typeof msg.key !== 'string') {
@@ -106,23 +114,34 @@ export default class Objects extends Endpoint {
     const chunk = this.bySKey.getBranch(msg.sKey);
     const collection = this.byKey.createBranch(...parts);
 
+    // Check if we are subscribed
+    if (!chunk) {
+      console.warn('Received "addObj" message from the server, while not '
+      + 'subscribed to the object\'s subscription key');
+
+      return;
+    }
+
     // Check if we already have this object
     let obj = collection.getLeaf(id);
 
     if (obj) {
       console.error('The server sent us an addObj message, but we alredy had '
       + `the object locally: ${msg.key}`);
-      throw new Error('TODO: remove and teardown c'); // TODO: Should we remove and teardown c intead of throwing an error??
+      // TODO: Should we remove and teardown c intead of throwing an error??
+      throw new Error('TODO: remove and teardown c');
     }
 
     obj = new collection.class(msg.key, msg.state, this);
     obj.id = id;
     obj.key = msg.key;
+    obj.v = msg.v;
 
     chunk.setLeaf(msg.key, obj);
     collection.setLeaf(id, obj);
 
     this.emit('add', obj, msg);
+    this.applyQueuedMessages(obj);
   }
 
   /**
@@ -147,8 +166,12 @@ export default class Objects extends Endpoint {
 
     if (!obj) {
       // this is just a warning, because it will just happen occasionally.
-      console.warn('We received a modObj request, but could not find the '
-      + `object locally: ${msg.key}`);
+      console.log('We received a modObj request, but could not find the '
+      + `object locally: ${msg.key}. Mesasage will be queued if the message `
+      + 'targets an active subscription');
+
+      if (chunk) this.queueMessage(msg);
+      else console.log('... not subscribed to chunk');
 
       return;
     }
@@ -158,6 +181,35 @@ export default class Objects extends Endpoint {
       + `collection, but not the ${msg.sKey} chunk.`);
       // Keep trying to move the object...
     }
+
+    if (typeof msg.v !== 'number') {
+      console.error(`Received modObj message with a bad version: ${msg.v}`);
+
+      return;
+    }
+
+    // First check if the message is arriving at the right time. If our message
+    // is obsolete, discard it.
+    if (msg.v <= obj.v) {
+      console.warn('Discarded obsolete message:', msg);
+
+      return;
+    }
+
+    if (msg.v > obj.v + 1) {
+      console.error('DANGER: Out of order messages are not supported after receieveing addObj', msg);
+
+      return;
+    }
+
+    // We are definitely going to modify the object. We know that the msg's
+    // version is exactly one more than the object's version.
+    obj.v++;
+
+    // At this point, There are 3 possiblities
+    // - we are moving within a chunk. Easy -- just update
+    // - we are moving to a new chunk. Remove this one chunk, add to another
+    // - we are moving to a chunk, and are not subscribed to that chunk
 
     // Are we modifying within a chunk?
     if (!msg.nsKey) {
@@ -231,5 +283,72 @@ export default class Objects extends Endpoint {
     if (!collection) return null;
 
     return collection.getLeaf(id) || null;
+  }
+
+  /**
+   * Synk Objects does not assume that messages will arrive in the correct
+   * order. When we recieve a message, it is possible that we have not yet
+   * received the ssociated addObj message. It is also possible that we do
+   *
+   * Append a message to the queue for a given object. Whenever an object is
+   * added OR a modification is applied. We will check to see if there are
+   * queued messages that should be replayed.
+   *
+   * This function should probably never be called except by methods of the
+   * Objects class.
+   *
+   * @param {Object} msg - modObj message. In the future we may also support
+   *        remObj messages.
+   */
+  queueMessage(msg) {
+    let queue;
+
+    if (this.queuedMessages.hasOwnProperty(msg.key))
+      queue = this.queuedMessages[msg.key];
+    else {
+      queue = [];
+      this.queuedMessages[msg.key] = queue;
+    }
+
+    queue.push(msg);
+  }
+
+  /**
+   * Apply all possible messages from the queue.
+   *
+   * If any messages are found to be obsolete before reading a applicable
+   * message, discard those messages.
+   *
+   * Once any messages are applied, IF the queue is empty delete it's list from
+   * this.queuedMessages
+   *
+   * @param {Object} obj - this is a synk object with update(state) and
+   *        teardown() methods.
+   */
+  applyQueuedMessages(obj) {
+    if (!this.queuedMessages.hasOwnProperty(obj.key)) return;
+
+    const queue = this.queuedMessages[obj.key]
+      .filter((m) => m.v > obj.v)
+      .sort((a, b) => a.v - b.v);
+
+    this.queuedMessages[obj.key] = queue;
+
+    for (const [i, msg] of queue.entries()) {
+      const target = obj.v + 1;
+
+      if (msg.v === target) {
+        // This is actually pretty sneaky. Normally we cannot modify an array
+        // while iterating over it. However, in this case we only remove the
+        // FIRST match, and then break out of the loop -- so it should be okay.
+        this.modObj(msg);
+      } else if (msg.v >= target) {
+        queue.splice(0, i); // leave only unapplied messages.
+        console.error('DANGER: failed to replay all modObj messages:', queue);
+        break;
+      }
+    }
+
+    delete this.queuedMessages[obj.key];
   }
 }
