@@ -52,14 +52,6 @@ describe('Objects', function() {
     v: 0,
   };
 
-  const modObjMsg = {
-    method: 'modObj',
-    key: 't:0000',
-    sKey: 'sk1',
-    v: 1,
-    diff: { x: 99 },
-  };
-
   const objs = new Objects();
 
   // Standard initialization. Specify which class we want to use for objects
@@ -96,7 +88,6 @@ describe('Objects', function() {
   });
 
   describe('Objects.modObj', function() {
-
     const addMsg = {
       method: 'addObj',
       key: 't:0001',

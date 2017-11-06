@@ -165,13 +165,13 @@ export default class Objects extends Endpoint {
     // Do some sanity checks...
 
     if (!obj) {
-      // this is just a warning, because it will just happen occasionally.
-      console.log('We received a modObj request, but could not find the '
-      + `object locally: ${msg.key}. Mesasage will be queued if the message `
-      + 'targets an active subscription');
-
       if (chunk) this.queueMessage(msg);
-      else console.log('... not subscribed to chunk');
+      else {
+        // this is just a warning, because it will just happen occasionally.
+        console.warn('We received a modObj request. We could not find the '
+          + `object locally: ${msg.key}. And the message targets an SKey we `
+          + 'are  not subscribed to');
+      }
 
       return;
     }

@@ -1,7 +1,5 @@
-import Emitter from 'eventemitter3';
 import { expect } from 'chai';
 import Synk from './Synk';
-import Objects from './Objects';
 
 describe('Synk', function() {
   describe('updateSubscription', function() {
