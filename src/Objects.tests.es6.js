@@ -143,5 +143,20 @@ describe('Objects', function() {
     it('Should remove the queued messages on successful removal', function() {
       assert.notExists(objs.queuedMessages['t:0002']);
     });
+
+    it('Should discard obsolete messages', function() {
+      // modify - these should be discarded
+      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 1, diff: { x: 1, a: 100 } });
+      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 2, diff: { x: 2, b: 100 } });
+      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 3, diff: { x: 3, c: 100 } });
+      // modify - this should be applied
+      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 4, diff: { x: 4, d: 100 } });
+      // add the object at version=3
+      objs.addObj({ method: 'addObj', key: 't:0003', sKey: 'sk1', v: 3, state: { x: 100, z: 100 } });
+
+      const obj = objs.get('t:0003');
+
+      assert.deepEqual(obj.state, { x: 4, z: 100, d: 100 });
+    });
   });
 });
