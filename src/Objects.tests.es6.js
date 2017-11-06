@@ -17,7 +17,6 @@ class TObj {
    * @param {synk.Objects} synkObjects - where this i
    */
   constructor(key, state, synkObjects) {
-    this.key = key;
     this.state = {};
     this.synkObjects = synkObjects;
     this.update(state);
@@ -85,6 +84,10 @@ describe('Objects', function() {
       assert.exists(obj);
       assert.deepEqual(obj.state, addObjMsg.state);
       assert.instanceOf(obj, TObj);
+    });
+
+    it('should be initialized with a .key', function() {
+      assert.equal(obj.key, addObjMsg.key);
     });
 
     it('should initialize the Object\'s ".v" member', function() {

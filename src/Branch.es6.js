@@ -3,11 +3,21 @@
  */
 class Leaf {
   /**
+   * @param {string} key - The objects key
+   * @param {object} state - the objects initial state
+   * @param {synk-js.Objects} synkObjects - the parent synk-js Objects container
+   */
+  constructor(key, state, synkObjects) {
+    this.state = {};
+    this.synkObjects = synkObjects;
+    this.update(state);
+  }
+  /**
    * Update is called when the server changes the object
    * @param {object} diff - changes to be applied to the object
    */
   update(diff) {
-    Object.assign(this, diff);
+    Object.assign(this.state, diff);
   }
 
   /**
