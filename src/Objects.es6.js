@@ -170,7 +170,7 @@ export default class Objects extends Endpoint {
         // this is just a warning, because it will just happen occasionally.
         console.warn('We received a modObj request. We could not find the '
           + `object locally: ${msg.key}. And the message targets an SKey we `
-          + 'are  not subscribed to');
+          + 'are not subscribed to');
       }
 
       return;
