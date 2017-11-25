@@ -447,19 +447,28 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
  * Default Leaf object. If an object is created on 
  */
 var Leaf = function () {
-  function Leaf() {
+  /**
+   * @param {string} key - The objects key
+   * @param {object} state - the objects initial state
+   * @param {synk-js.Objects} synkObjects - the parent synk-js Objects container
+   */
+  function Leaf(key, state, synkObjects) {
     _classCallCheck(this, Leaf);
+
+    this.state = {};
+    this.synkObjects = synkObjects;
+    this.update(state);
   }
+  /**
+   * Update is called when the server changes the object
+   * @param {object} diff - changes to be applied to the object
+   */
+
 
   _createClass(Leaf, [{
     key: 'update',
-
-    /**
-     * Update is called when the server changes the object
-     * @param {object} diff - changes to be applied to the object
-     */
     value: function update(diff) {
-      Object.assign(this, diff);
+      Object.assign(this.state, diff);
     }
 
     /**
@@ -800,6 +809,8 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
+var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
+
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _Endpoint2 = __webpack_require__(3);
@@ -865,6 +876,15 @@ var Objects = function (_Endpoint) {
 
     _this.bySKey = new _Branch2.default();
     _this.byKey = new _Branch2.default();
+    _this.byId = {};
+
+    // queuedMessages is for storing messages that target an object that we have
+    // not yet received. Messages that arrive out of order after addObj has been
+    // received should be stored on the object itself, so they can be garbage
+    // collected correctly.
+    // As of November 5, 2017, unordered modObj messages that arrive after addObj
+    // are not supported. However, support may be added in the future.
+    _this.queuedMessages = {};
     return _this;
   }
 
@@ -898,9 +918,20 @@ var Objects = function (_Endpoint) {
           var _byKey;
 
           // Remove each object from its collection
-          var parts = leaf.key.split(':');
-          var id = parts.pop();
-          var collection = (_byKey = _this2.byKey).getBranch.apply(_byKey, _toConsumableArray(parts));
+
+          var parts = void 0;
+          var id = void 0;
+
+          if (leaf.id && leaf.t) {
+            // BUG(charles): we could simplify once we remove keys altogether
+            parts = leaf.t.split(':');
+            id = leaf.id;
+          } else {
+            parts = leaf.key.split(':');
+            id = parts.pop();
+          }
+
+          var collection = (_byKey = _this2.byKey).getBranch.apply(_byKey, _toConsumableArray(parts)); // The group of objects in that type
 
           // If the collection doesn't exist, we have bug
           if (collection) collection.removeLeaf(id);else console.error('Unsubscribed from chunk, but collection not found: ' + parts.join(':'));
@@ -918,12 +949,12 @@ var Objects = function (_Endpoint) {
     /**
      * Create a new object. Typically called from the server.
      *
-     * Note that when we add an object, the .id and .key properties are
+     * Note that when we add an object, the .id .key and .v properties are
      * automatically set. The Objects class depends on these being available
      * when removing the object, so they should not be changed by client code.
      *
-     * @param {Object} msg - contains .key, .state, .sKey. Optional .psKey
-     *        indicates object moved here from another chunk.
+     * @param {Object} msg - contains .key, .state, .sKey. The presence of .psKey
+     *        indicates this object moved here from another chunk.
      */
 
   }, {
@@ -942,22 +973,32 @@ var Objects = function (_Endpoint) {
       var chunk = this.bySKey.getBranch(msg.sKey);
       var collection = (_byKey2 = this.byKey).createBranch.apply(_byKey2, _toConsumableArray(parts));
 
+      // Check if we are subscribed
+      if (!chunk) {
+        console.warn('Received "addObj" message from the server, while not ' + 'subscribed to the object\'s subscription key');
+
+        return;
+      }
+
       // Check if we already have this object
       var obj = collection.getLeaf(id);
 
       if (obj) {
         console.error('The server sent us an addObj message, but we alredy had ' + ('the object locally: ' + msg.key));
-        throw new Error('TODO: remove and teardown c'); // TODO: Should we remove and teardown c intead of throwing an error??
+        // TODO: Should we remove and teardown c intead of throwing an error??
+        throw new Error('TODO: remove and teardown c');
       }
 
       obj = new collection.class(msg.key, msg.state, this);
       obj.id = id;
       obj.key = msg.key;
+      obj.v = msg.v;
 
       chunk.setLeaf(msg.key, obj);
       collection.setLeaf(id, obj);
 
       this.emit('add', obj, msg);
+      this.applyQueuedMessages(obj);
     }
 
     /**
@@ -986,8 +1027,10 @@ var Objects = function (_Endpoint) {
       // Do some sanity checks...
 
       if (!obj) {
-        // this is just a warning, because it will just happen occasionally.
-        console.warn('We received a modObj request, but could not find the ' + ('object locally: ' + msg.key));
+        if (chunk) this.queueMessage(msg);else {
+          // this is just a warning, because it will just happen occasionally.
+          console.warn('We received a modObj request. We could not find the ' + ('object locally: ' + msg.key + '. And the message targets an SKey we ') + 'are not subscribed to');
+        }
 
         return;
       }
@@ -996,6 +1039,35 @@ var Objects = function (_Endpoint) {
         console.error('Received modObj. The object was found on the ' + parts + ' ' + ('collection, but not the ' + msg.sKey + ' chunk.'));
         // Keep trying to move the object...
       }
+
+      if (typeof msg.v !== 'number') {
+        console.error('Received modObj message with a bad version: ' + msg.v);
+
+        return;
+      }
+
+      // First check if the message is arriving at the right time. If our message
+      // is obsolete, discard it.
+      if (msg.v <= obj.v) {
+        console.warn('Discarded obsolete message:', msg);
+
+        return;
+      }
+
+      if (msg.v > obj.v + 1) {
+        console.error('DANGER: Out of order messages are not supported after receieveing addObj', msg);
+
+        return;
+      }
+
+      // We are definitely going to modify the object. We know that the msg's
+      // version is exactly one more than the object's version.
+      obj.v++;
+
+      // At this point, There are 3 possiblities
+      // - we are moving within a chunk. Easy -- just update
+      // - we are moving to a new chunk. Remove this one chunk, add to another
+      // - we are moving to a chunk, and are not subscribed to that chunk
 
       // Are we modifying within a chunk?
       if (!msg.nsKey) {
@@ -1070,13 +1142,297 @@ var Objects = function (_Endpoint) {
     value: function get(key) {
       var _byKey5;
 
+      var obj = this.byId[key];
+
+      if (obj) return obj;
+
       var parts = key.split(':');
       var id = parts.pop();
       var collection = (_byKey5 = this.byKey).getBranch.apply(_byKey5, _toConsumableArray(parts));
 
-      if (!collection) return null;
-
       return collection.getLeaf(id) || null;
+    }
+
+    /**
+     * Synk Objects does not assume that messages will arrive in the correct
+     * order. When we recieve a message, it is possible that we have not yet
+     * received the ssociated addObj message. It is also possible that we do
+     *
+     * Append a message to the queue for a given object. Whenever an object is
+     * added OR a modification is applied. We will check to see if there are
+     * queued messages that should be replayed.
+     *
+     * This function should probably never be called except by methods of the
+     * Objects class.
+     *
+     * @param {Object} msg - mod message. In the future we may also support
+     *        rem messages.
+     */
+
+  }, {
+    key: 'queueMessage',
+    value: function queueMessage(msg) {
+      var queue = void 0;
+      var id = msg.key || msg.id;
+
+      if (this.queuedMessages.hasOwnProperty(id)) queue = this.queuedMessages[id];else {
+        queue = [];
+        this.queuedMessages[id] = queue;
+      }
+
+      queue.push(msg);
+    }
+
+    /**
+     * Apply all possible messages from the queue.
+     *
+     * If any messages are found to be obsolete before reading a applicable
+     * message, discard those messages.
+     *
+     * Once any messages are applied, IF the queue is empty delete it's list from
+     * this.queuedMessages
+     *
+     * @param {Object} obj - this is a synk object with update(state) and
+     *        teardown() methods.
+     */
+
+  }, {
+    key: 'applyQueuedMessages',
+    value: function applyQueuedMessages(obj) {
+      var id = obj.key || obj.id;
+
+      if (!this.queuedMessages.hasOwnProperty(id)) return;
+      var queue = this.queuedMessages[id].filter(function (m) {
+        return m.v > obj.v;
+      }).sort(function (a, b) {
+        return a.v - b.v;
+      });
+
+      this.queuedMessages[id] = queue;
+
+      var _iteratorNormalCompletion = true;
+      var _didIteratorError = false;
+      var _iteratorError = undefined;
+
+      try {
+        for (var _iterator = queue.entries()[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+          var _step$value = _slicedToArray(_step.value, 2),
+              i = _step$value[0],
+              msg = _step$value[1];
+
+          var target = obj.v + 1;
+
+          if (msg.v === target) {
+            // This is actually pretty sneaky. Normally we cannot modify an array
+            // while iterating over it. However, in this case we only remove the
+            // FIRST match, and then break out of the loop -- so it should be okay.
+            if (msg.method === 'mod') this.mod(msg);else this.modObj(msg);
+          } else if (msg.v >= target) {
+            queue.splice(0, i); // leave only unapplied messages.
+            console.error('DANGER: failed to replay all modObj messages:', queue);
+            break;
+          }
+        }
+      } catch (err) {
+        _didIteratorError = true;
+        _iteratorError = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion && _iterator.return) {
+            _iterator.return();
+          }
+        } finally {
+          if (_didIteratorError) {
+            throw _iteratorError;
+          }
+        }
+      }
+
+      delete this.queuedMessages[id];
+    }
+
+    //////////////////////////////////////////////////////////////////////////////
+    //
+    // New style add, rem, mod methods
+    //
+    //////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * Create a new object. Typically called from the server.
+     *
+     * Note that when we add an object, the .id .t and .v properties are
+     * automatically set. The Objects class depends on these being available
+     * when removing the object, so they should not be changed by client code.
+     *
+     * @param {Object} msg - contains .v .id, .state, .sKey. The presence of
+     *        .psKey indicates this object moved here from another chunk.
+     */
+
+  }, {
+    key: 'add',
+    value: function add(msg) {
+      var _byKey6;
+
+      if (typeof msg.sKey !== 'string' || typeof msg.id !== 'string') {
+        console.error('Received invalid add message', msg);
+
+        return;
+      }
+
+      var chunk = this.bySKey.getBranch(msg.sKey);
+      var collection = (_byKey6 = this.byKey).createBranch.apply(_byKey6, _toConsumableArray(msg.t.split(':')));
+
+      // Check if we are subscribed
+      if (!chunk) {
+        console.warn('Received "add" message from the server, while not ' + 'subscribed to the object\'s subscription key');
+
+        return;
+      }
+
+      // Check if we already have this object
+      var obj = collection.getLeaf(msg.id);
+
+      if (obj) {
+        console.error('The server sent us an add message, but we alredy had ' + ('the object locally: ' + msg.id));
+        // TODO: Should we remove and teardown c intead of throwing an error??
+        throw new Error('TODO: remove and teardown c');
+      }
+
+      obj = new collection.class(msg.id, msg.state, this);
+      obj.id = msg.id;
+      obj.t = msg.t;
+      obj.v = msg.v;
+
+      chunk.setLeaf(msg.id, obj);
+      collection.setLeaf(msg.id, obj);
+      this.byId[obj.id] = obj;
+
+      this.emit('add', obj, msg);
+      this.applyQueuedMessages(obj);
+    }
+
+    /**
+     * Remove an object
+     * @param {Object} msg - obj containing .id .t and .sKey
+     */
+
+  }, {
+    key: 'rem',
+    value: function rem(msg) {
+      var _byKey7;
+
+      if (typeof msg.sKey !== 'string' || typeof msg.id !== 'string') {
+        console.error('Received invalid remObj message', msg);
+
+        return;
+      }
+
+      var parts = msg.t.split(':');
+      var id = msg.id;
+      var chunk = this.bySKey.getBranch(msg.sKey); // current chunk
+      var collection = (_byKey7 = this.byKey).getBranch.apply(_byKey7, _toConsumableArray(parts));
+      var obj = collection.getLeaf(id);
+
+      if (chunk) chunk.removeLeaf(msg.id);else console.error('Tried to remove ' + msg.sKey + ', but could not find objects at ' + parts);
+
+      if (collection) collection.removeLeaf(id);else console.error('Tried to remove ' + id + ' but could not find ' + parts + ' in .byKey');
+
+      delete this.byId[id];
+
+      if (obj) {
+        this.emit('rem', obj, msg);
+        obj.teardown();
+      } else console.error('DANGER: Tried to remove ' + msg.id + ', but could not find object');
+    }
+  }, {
+    key: 'mod',
+    value: function mod(msg) {
+      var _byKey8;
+
+      if (typeof msg.sKey !== 'string' || typeof msg.id !== 'string') {
+        console.error('Received invalid mod message', msg);
+
+        return;
+      }
+
+      var id = msg.id;
+      var obj = this.get(id);
+      var chunk = this.bySKey.getBranch(msg.sKey); // current chunk
+
+      // Do some sanity checks...
+
+      if (!obj) {
+        if (chunk) this.queueMessage(msg);else {
+          // this is just a warning, because it will just happen occasionally.
+          console.warn('We received a modObj request. We could not find the ' + ('object locally: ' + id + '. And the message targets an SKey we ') + 'are not subscribed to');
+        }
+
+        return;
+      }
+
+      var parts = obj.t.split(':');
+      var collection = (_byKey8 = this.byKey).createBranch.apply(_byKey8, _toConsumableArray(parts));
+
+      if (chunk.getLeaf(msg.id) !== obj) {
+        console.error('Received modObj. The object was found on the ' + parts + ' ' + ('collection, but not the ' + msg.sKey + ' chunk.'));
+        // Keep trying to move the object...
+      }
+
+      if (typeof msg.v !== 'number') {
+        console.error('Received modObj message with a bad version: ' + msg.v);
+
+        return;
+      }
+
+      // First check if the message is arriving at the right time. If our message
+      // is obsolete, discard it.
+      if (msg.v <= obj.v) {
+        console.warn('Discarded obsolete message:', msg);
+
+        return;
+      }
+
+      if (msg.v > obj.v + 1) {
+        console.error('DANGER: Out of order messages are not supported after receieveing addObj', msg);
+
+        return;
+      }
+
+      // We are definitely going to modify the object. We know that the msg's
+      // version is exactly one more than the object's version.
+      obj.v++;
+
+      // At this point, There are 3 possiblities
+      // - we are moving within a chunk. Easy -- just update
+      // - we are moving to a new chunk. Remove this one chunk, add to another
+      // - we are moving to a chunk, and are not subscribed to that chunk
+
+      // Are we modifying within a chunk?
+      if (!msg.nsKey) {
+        obj.update(msg.diff);
+        this.emit('mod', obj, msg);
+
+        return;
+      }
+
+      // The object must be moved out of the current chunk. If we are subscribed
+      // to the new chunk, move the object there. If we are not subscribed,
+      // remove and teardown() the object.
+      chunk.removeLeaf(id);
+
+      var newChunk = this.bySKey.getBranch(msg.nsKey);
+
+      if (newChunk) {
+        newChunk.setLeaf(id, obj);
+        obj.update(msg.diff);
+        this.emit('mod', obj, msg);
+      } else {
+        collection.removeLeaf(id);
+        this.emit('rem', obj, msg);
+        obj.teardown();
+      }
+
+      return;
     }
   }]);
 
