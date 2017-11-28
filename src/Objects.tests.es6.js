@@ -43,15 +43,6 @@ describe('Objects', function() {
     assert.exists(Objects, 'Connection exists');
   });
 
-  // Example addObj message
-  const addObjMsg = {
-    method: 'addObj',
-    state: { x: 100, y: -100, name: 'bob' },
-    key: 't:0000',
-    sKey: 'sk1',
-    v: 0,
-  };
-
   const objs = new Objects();
 
   // Standard initialization. Specify which class we want to use for objects
@@ -67,104 +58,6 @@ describe('Objects', function() {
     });
   });
 
-  describe('Objects.addObj', function() {
-    objs.addObj(addObjMsg);
-
-    const obj = objs.get(addObjMsg.key);
-
-    it('should create a new TObj in the .byKey branch', function() {
-      assert.exists(obj);
-      assert.deepEqual(obj.state, addObjMsg.state);
-      assert.instanceOf(obj, TObj);
-    });
-
-    it('should be initialized with a .key', function() {
-      assert.equal(obj.key, addObjMsg.key);
-    });
-
-    it('should initialize the Object\'s ".v" member', function() {
-      assert.equal(obj.v, addObjMsg.v);
-    });
-  });
-
-  describe('Objects.modObj', function() {
-    const addMsg = {
-      method: 'addObj',
-      key: 't:0001',
-      sKey: 'sk1',
-      v: 0,
-      state: { x: 0, y: 0 },
-    };
-
-    const modObjMsg = {
-      method: 'modObj',
-      key: 't:0001',
-      sKey: 'sk1',
-      v: 1,
-      diff: { x: 99 },
-    };
-
-    objs.addObj(addMsg);
-
-    it('Newly added object should be accessible via .get', function() {
-      const obj = objs.get(addMsg.key);
-
-      assert.deepEqual(obj.state, addMsg.state);
-    });
-
-    it('Its contents should be updated by modObj', function() {
-      const obj = objs.get(addMsg.key);
-
-      objs.modObj(modObjMsg);
-      assert.equal(obj.state.x, modObjMsg.diff.x);
-    });
-
-    it('Should update the object\'s version', function() {
-      const obj = objs.get(addMsg.key);
-
-      assert.equal(obj.v, modObjMsg.v);
-    });
-
-    it('Should que messages when the object has not yet been received', function() {
-      objs.modObj({ method: 'modObj', key: 't:0002', sKey: 'sk1', v: 2, diff: { x: 97 } }); // second
-      objs.modObj({ method: 'modObj', key: 't:0002', sKey: 'sk1', v: 1, diff: { x: 98, y: 1 } }); // first
-      assert.exists(objs.queuedMessages['t:0002']);
-      assert.equal(objs.queuedMessages['t:0002'].length, 2);
-    });
-
-    it('Should replay the queued messages on receiveing addObj', function() {
-      objs.addObj({ method: 'addObj', key: 't:0002', sKey: 'sk1', v: 0, state: { z: 100 } });
-      const obj = objs.get('t:0002');
-
-      assert.deepEqual(obj.state, { x: 97, y: 1, z: 100 });
-      assert.equal(obj.v, 2);
-    });
-
-    it('Should remove the queued messages on successful removal', function() {
-      assert.notExists(objs.queuedMessages['t:0002']);
-    });
-
-    it('Should discard obsolete messages', function() {
-      // modify - these should be discarded
-      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 1, diff: { x: 1, a: 100 } });
-      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 2, diff: { x: 2, b: 100 } });
-      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 3, diff: { x: 3, c: 100 } });
-      // modify - this should be applied
-      objs.modObj({ method: 'modObj', key: 't:0003', sKey: 'sk1', v: 4, diff: { x: 4, d: 100 } });
-      // add the object at version=3
-      objs.addObj({ method: 'addObj', key: 't:0003', sKey: 'sk1', v: 3, state: { x: 100, z: 100 } });
-
-      const obj = objs.get('t:0003');
-
-      assert.deepEqual(obj.state, { x: 4, z: 100, d: 100 });
-    });
-  });
-
-  //////////////////////////////////////////////////////////////////////////////
-  //
-  // New style add, rem, mod methods
-  //
-  //////////////////////////////////////////////////////////////////////////////
   const addMsg = {
     method: 'addObj',
     state: { x: 100, y: -100, name: 'bob' },
