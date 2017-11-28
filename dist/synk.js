@@ -1241,7 +1241,7 @@ var Objects = function (_Endpoint) {
      * @param {[Branch]} branch1 - Optional first branch
      * @param {[Branch]} branch2 - Optional second branch
      * @param {[Object]} msg - The msg that triggered the removal. If provided
-     *        this will emit with the object
+     *        this will emit along with the object
      */
 
   }, {
