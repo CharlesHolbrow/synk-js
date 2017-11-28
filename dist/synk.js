@@ -1150,6 +1150,8 @@ var Objects = function (_Endpoint) {
       var id = parts.pop();
       var collection = (_byKey5 = this.byKey).getBranch.apply(_byKey5, _toConsumableArray(parts));
 
+      if (!collection) return null;
+
       return collection.getLeaf(id) || null;
     }
 
