@@ -76,17 +76,12 @@ export default class Objects extends Endpoint {
       this.bySKey.removeBranch(p).forEach((leaf) => {
         // Remove each object from its collection
         const parts = leaf.t.split(':');
-        const id = leaf.id;
         const collection =  this.byKey.getBranch(...parts); // The group of objects in that type
 
         // If the collection doesn't exist, we have bug
-        if (collection) collection.removeLeaf(id);
-        else console.error(`Unsubscribed from chunk, but collection not found: ${parts.join(':')}`);
+        if (!collection) console.error(`Unsubscribed from chunk, but collection not found: ${leaf.t}`);
 
-        delete this.byId[id];
-
-        this.emit('rem', leaf, null);
-        leaf.teardown();
+        this.removeObject(leaf, collection, null, null);
       });
     });
 
@@ -186,12 +181,6 @@ export default class Objects extends Endpoint {
     delete this.queuedMessages[id];
   }
 
-  //////////////////////////////////////////////////////////////////////////////
-  //
-  // New style add, rem, mod methods
-  //
-  //////////////////////////////////////////////////////////////////////////////
-
   /**
    * Create a new object. Typically called from the server.
    *
@@ -244,7 +233,7 @@ export default class Objects extends Endpoint {
   }
 
   /**
-   * Remove an object
+   * Remove an object. Usually called by the server.
    * @param {Object} msg - obj containing .id .t and .sKey
    */
   rem(msg) {
@@ -260,20 +249,19 @@ export default class Objects extends Endpoint {
     const collection = this.byKey.getBranch(...parts);
     const obj = collection.getLeaf(id);
 
-    if (chunk) chunk.removeLeaf(msg.id);
-    else console.error(`Tried to remove ${msg.sKey}, but could not find objects at ${parts}`);
+    if (!chunk) console.error(`Tried to remove ${msg.sKey}, but could not find objects at ${parts}`);
 
-    if (collection) collection.removeLeaf(id);
-    else console.error(`Tried to remove ${id} but could not find ${parts} in .byKey`);
+    if (!collection) console.error(`Tried to remove ${id} but could not find ${parts} in .byKey`);
 
-    delete this.byId[id];
-
-    if (obj) {
-      this.emit('rem', obj, msg);
-      obj.teardown();
-    } else console.error(`DANGER: Tried to remove ${msg.id}, but could not find object`);
+    if (obj) this.removeObject(obj, chunk, collection, msg);
+    else console.error(`DANGER: Tried to remove ${msg.id}, but could not find object`);
   }
 
+  /**
+   * Modify an object. Usually called from the server.
+   * @param {Object} msg containing .id .sKey .t .v and .diff. the presense of
+   *        .nsKey indicates that the object is moving to a new subscription key
+   */
   mod(msg) {
     if (typeof msg.sKey !== 'string' || typeof msg.id !== 'string') {
       console.error('Received invalid mod message', msg);
@@ -348,20 +336,38 @@ export default class Objects extends Endpoint {
     // The object must be moved out of the current chunk. If we are subscribed
     // to the new chunk, move the object there. If we are not subscribed,
     // remove and teardown() the object.
-    chunk.removeLeaf(id);
-
     const newChunk = this.bySKey.getBranch(msg.nsKey);
 
     if (newChunk) {
+      chunk.removeLeaf(id);
       newChunk.setLeaf(id, obj);
       obj.update(msg.diff);
       this.emit('mod', obj, msg);
-    } else {
-      collection.removeLeaf(id);
-      this.emit('rem', obj, msg);
-      obj.teardown();
-    }
+    } else
+      this.removeObject(obj, collection, chunk, msg);
 
     return;
+  }
+
+  /**
+   * Remove object from up to two branches
+   * - Causes teardown()
+   * - emits 'rem', obj, msg
+   *
+   * @param {Object} obj - object to remove with .id
+   * @param {[Branch]} branch1 - Optional first branch
+   * @param {[Branch]} branch2 - Optional second branch
+   * @param {[Object]} msg - The msg that triggered the removal. If provided
+   *        this will emit with the object
+   */
+  removeObject(obj, branch1, branch2, msg) {
+    if (branch1) branch1.removeLeaf(obj.id);
+    if (branch2) branch2.removeLeaf(obj.id);
+
+    delete this.byId[obj.id];
+
+    this.emit('rem', obj, msg);
+
+    obj.teardown();
   }
 }
