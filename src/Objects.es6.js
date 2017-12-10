@@ -219,7 +219,7 @@ export default class Objects extends Endpoint {
       throw new Error('TODO: remove and teardown c');
     }
 
-    obj = new collection.class(msg.id, msg.state, this);
+    obj = new collection.class(msg.id, msg.state, this, msg.t);
     obj.id = msg.id;
     obj.t = msg.t;
     obj.v = msg.v;
