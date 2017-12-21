@@ -7,9 +7,8 @@ class Leaf {
    * @param {object} state - the objects initial state
    * @param {synk-js.Objects} synkObjects - the parent synk-js Objects container
    */
-  constructor(key, state, synkObjects) {
+  constructor(key, state) {
     this.state = {};
-    this.synkObjects = synkObjects;
     this.update(state);
   }
   /**
