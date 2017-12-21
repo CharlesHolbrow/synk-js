@@ -35,7 +35,7 @@ import Branch from './Branch';
  */
 export default class Objects extends Endpoint {
   /**
-   * @param {App} app - the aether App this object is built on
+   * Create an Objects instance
    */
   constructor() {
     super();
