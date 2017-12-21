@@ -867,7 +867,7 @@ var Objects = function (_Endpoint) {
   _inherits(Objects, _Endpoint);
 
   /**
-   * @param {App} app - the aether App this object is built on
+   * Create an Objects instance
    */
   function Objects() {
     _classCallCheck(this, Objects);
