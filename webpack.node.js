@@ -1,17 +1,7 @@
 var webpack = require('webpack');
-
 var regular = require('./webpack.config.js');
 
 regular.target = 'node';
-
-
-/////////////////////////////
-// Add the websocket resolver
-if (!regular.resolve) regular.resolve = {};
-if (!regular.resolve.alias) regular.resolve.alias = {};
-
-regular.resolve.alias['WebSocket'] = 'ws';
-
 
 /////////////////////
 // Add provide plugin
@@ -23,9 +13,18 @@ var provideWebSocket = new webpack.ProvidePlugin({
 
 regular.plugins.push(provideWebSocket);
 
-
 //////////////////
 // Update filename
 regular.output.filename = 'synk.node.js'
+
+
+/////////////////////////////////////////////////
+// Don't bundle node ws lib in the output package
+regular.externals.WebSocket = {
+    commonjs:'ws',
+    commonjs2: 'ws',
+    amd: 'ws',
+    global: 'WebSocket',
+};
 
 module.exports = regular;
