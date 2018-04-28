@@ -452,11 +452,10 @@ var Leaf = function () {
    * @param {object} state - the objects initial state
    * @param {synk-js.Objects} synkObjects - the parent synk-js Objects container
    */
-  function Leaf(key, state, synkObjects) {
+  function Leaf(key, state) {
     _classCallCheck(this, Leaf);
 
     this.state = {};
-    this.synkObjects = synkObjects;
     this.update(state);
   }
   /**
