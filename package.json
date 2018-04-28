@@ -1,6 +1,6 @@
 {
   "name": "synk-js",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Companion to the go synk package",
   "main": "dist/synk.js",
   "module": "src/index.js",
